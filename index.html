@@ -1,551 +1,576 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>استبيان رضا الموظفين — أساس ASAAS</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><rect x='2' y='2' width='11' height='11' rx='2' fill='%232DADA0'/><rect x='15' y='2' width='11' height='11' rx='2' fill='%234A9B3C'/><rect x='2' y='15' width='11' height='11' rx='2' fill='%231B3F6E'/><rect x='15' y='15' width='11' height='11' rx='2' fill='%235BB3E0'/></svg>" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>استبيان رضا الموظفين | Employee Satisfaction Survey — ASAAS</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><rect x='2' y='2' width='11' height='11' rx='2' fill='%232DADA0'/><rect x='15' y='2' width='11' height='11' rx='2' fill='%234A9B3C'/><rect x='2' y='15' width='11' height='11' rx='2' fill='%231B3F6E'/><rect x='15' y='15' width='11' height='11' rx='2' fill='%235BB3E0'/></svg>"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet"/>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body { font-family: 'Tajawal', sans-serif; direction: rtl; background: #F5F7FA; color: #1A2332; }
-    #root { min-height: 100vh; }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%}
+    body{font-family:'Tajawal',sans-serif;direction:rtl;background:#F5F7FA;color:#1A2332}
+    #root{min-height:100vh}
+    .en{display:block;font-size:0.78em;color:#8A97A8;font-weight:400;margin-top:1px;direction:ltr;text-align:right}
+    .btn .en{display:inline;font-size:0.8em;opacity:0.85}
   </style>
 </head>
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-const { useState, useEffect, useCallback } = React;
-const BRAND = {
-  navy: "#1B3F6E",
-  blue: "#2E73B8",
-  teal: "#2DADA0",
-  green: "#4A9B3C",
-  lightBlue: "#5BB3E0",
-  bg: "#F5F7FA",
-  card: "#FFFFFF",
-  text: "#1A2332",
-  muted: "#6B7A8D",
-  border: "#E1E8F0",
-  success: "#2ECC71",
-  warning: "#F39C12",
-  danger: "#E74C3C",
-};
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useCallback } = React;
 
+// ── Bilingual text helper ────────────────────────────────────────────
+const T = ({ ar, en, className="" }) => (
+  <span className={className} style={{display:"block"}}>
+    {ar}
+    <span className="en">{en}</span>
+  </span>
+);
+
+// ── Storage ──────────────────────────────────────────────────────────
+function storageGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;}}
+function storageSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch{return false;}}
+
+// ── Brand colours ────────────────────────────────────────────────────
+const C = {navy:"#1B3F6E",blue:"#2E73B8",teal:"#2DADA0",green:"#4A9B3C",warn:"#F39C12",danger:"#E74C3C",muted:"#6B7A8D",bg:"#F5F7FA",border:"#E1E8F0"};
+
+// ── Survey questions (Arabic text + English translation) ─────────────
 const INITIAL_QUESTIONS = [
-  { id: "q_dept", section: "البيانات العامة", type: "radio", required: false, text: "القسم أو الإدارة", options: ["العمليات", "التقنية", "المالية", "الموارد البشرية", "أخرى"] },
-  { id: "q_exp", section: "البيانات العامة", type: "radio", required: false, text: "سنوات الخبرة في الشركة", options: ["أقل من سنة", "١-٣ سنوات", "٤-٦ سنوات", "٧-١٠ سنوات", "أكثر من ١٠ سنوات"] },
-  { id: "q3", section: "المسار الوظيفي والترقيات", type: "rating5", required: true, text: "أنا راضٍ عن مسيرتي الوظيفية الحالية في الشركة.", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
-  { id: "q4", section: "المسار الوظيفي والترقيات", type: "rating5", required: true, text: "أرى مساراً وظيفياً واضحاً أمامي داخل الشركة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q5", section: "المسار الوظيفي والترقيات", type: "rating5", required: true, text: "آلية الترقية في الشركة شفافة وعادلة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q6", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "كم مضى على آخر مراجعة لمسماك الوظيفي؟", options: ["أقل من سنة", "١-٣ سنوات", "٤-٧ سنوات", "أكثر من ٧ سنوات", "لم يُراجَع قط"] },
-  { id: "q7", section: "المسار الوظيفي والترقيات", type: "yesno", required: true, text: "هل تعتقد أن مسماك الوظيفي الحالي يعكس مؤهلاتك وخبراتك الفعلية؟", options: ["نعم", "لا", "لا أعرف"] },
-  { id: "q8", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "ما مدى أهمية مراجعة المسميات الوظيفية دورياً في رأيك؟", options: ["غير مهم", "مهم نوعاً ما", "مهم", "مهم جداً", "أولوية قصوى"] },
-  { id: "q9", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "ما التوقع الزمني المنطقي بين الترقيات المتتالية في رأيك؟", options: ["سنة واحدة", "٢-٣ سنوات", "٣-٤ سنوات", "٤-٥ سنوات", "حسب الأداء فقط"] },
-  { id: "q10", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "ما الذي تراه أكثر تأثيراً في قرارات الترقية؟", options: ["الأداء والإنتاجية", "سنوات الخبرة", "المؤهلات والشهادات", "التوصيات الإدارية", "الفرص المتاحة"] },
-  { id: "q11", section: "المسار الوظيفي والترقيات", type: "open", required: false, text: "ما اقتراحاتك لتحسين مسار الترقيات والتطور الوظيفي؟" },
-  { id: "q12", section: "التدريب والتطوير المهني", type: "rating5", required: true, text: "الشركة توفر فرص تدريب وتطوير كافية تلبي احتياجاتي المهنية.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q13", section: "التدريب والتطوير المهني", type: "yesno", required: true, text: "هل تلقيت دعماً من الشركة لحضور دورات تدريبية أو الحصول على شهادات مهنية خارجية؟", options: ["نعم", "لا", "لا أعرف"] },
-  { id: "q14", section: "التدريب والتطوير المهني", type: "radio", required: true, text: "مقارنةً بالشركات الأخرى في القطاع، كيف تقيّم مستوى الدعم التدريبي في أساس؟", options: ["أقل بكثير", "أقل قليلاً", "مماثل", "أفضل قليلاً", "أفضل بكثير"] },
-  { id: "q17", section: "التدريب والتطوير المهني", type: "open", required: false, text: "ما القطاعات أو المجالات التي تودّ أن تطوّر فيها مهاراتك؟" },
-  { id: "q18", section: "التواصل والشفافية المؤسسية", type: "rating5", required: true, text: "تتواصل الإدارة العليا مع الموظفين بشفافية وانتظام.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q19", section: "التواصل والشفافية المؤسسية", type: "rating5", required: true, text: "أشعر أن آرائي واقتراحاتي تُؤخذ بجدية من قِبَل الإدارة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q20", section: "التواصل والشفافية المؤسسية", type: "rating5", required: true, text: "أتلقى معلومات كافية عن التوجه الاستراتيجي للشركة ومستقبلها.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q23", section: "التواصل والشفافية المؤسسية", type: "open", required: false, text: "ما أكبر فجوة في التواصل تلاحظها بين الموظفين والإدارة؟" },
-  { id: "q24", section: "مستقبل الشركة وانتماء الموظف", type: "rating5", required: true, text: "أفهم التوجه الاستراتيجي لشركة أساس في المرحلة الراهنة بوضوح.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q25", section: "مستقبل الشركة وانتماء الموظف", type: "rating5", required: true, text: "أشعر بالاطمئنان على مستقبلي الوظيفي في الشركة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
-  { id: "q26", section: "مستقبل الشركة وانتماء الموظف", type: "radio", required: true, text: "التغييرات والتطورات المؤسسية الأخيرة أثّرت على روحي المعنوية بشكل:", options: ["سلبي جداً", "سلبي نوعاً ما", "محايد", "إيجابي نوعاً ما", "إيجابي جداً"] },
-  { id: "q27", section: "مستقبل الشركة وانتماء الموظف", type: "radio", required: true, text: "المعلومات التي تلقيتها عن مستقبل الشركة بعد الانتقال إلى مجموعة عمران كانت:", options: ["غير كافية على الإطلاق", "غير كافية", "كافية نوعاً ما", "كافية", "وافية جداً"] },
-  { id: "q28", section: "مستقبل الشركة وانتماء الموظف", type: "open", required: false, text: "ما المعلومات أو القرارات التي تودّ أن تكون أكثر وضوحاً بالنسبة لك؟" },
-  { id: "q29", section: "المزايا والتقدير الوظيفي", type: "rating5", required: true, text: "أشعر أن جهودي ومساهماتي تُقدَّر بشكل مناسب من قِبَل الشركة.", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
-  { id: "q30", section: "المزايا والتقدير الوظيفي", type: "rating5", required: true, text: "مزايا الموظفين الحالية (صحة، إجازات، مكافآت...) تلبي توقعاتي.", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
-  { id: "q31", section: "المزايا والتقدير الوظيفي", type: "yesno", required: true, text: "هل تعتقد أنه يجب أن يحظى الموظفون بمزايا من مشاريع الشركة (فنادق، طيران، إلخ)؟", options: ["نعم", "لا", "لا أعرف"] },
-  { id: "q33", section: "المزايا والتقدير الوظيفي", type: "open", required: false, text: "اقتراحات محددة لتحسين منظومة المزايا والتقدير:" },
-  { id: "q34", section: "الرضا العام", type: "rating5", required: true, text: "بشكل عام، مدى رضاك عن بيئة العمل في أساس:", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
-  { id: "q35", section: "الرضا العام", type: "radio", required: true, text: "ما احتمالية توصيتك لأحد المقربين بالعمل في شركة أساس؟", options: ["١-٢ (غير محتمل)", "٣-٤", "٥-٦", "٧-٨", "٩-١٠ (محتمل جداً)"] },
-  { id: "q36", section: "الرضا العام", type: "open", required: false, text: "ما الشيء الواحد الذي لو تغيّر سيحسن تجربتك في العمل بشكل كبير؟" },
-  { id: "q37", section: "الرضا العام", type: "open", required: false, text: "ما التحدي الذي تشعر أن الإدارة لا تقدّره بما يكفي في الوقت الحالي؟" },
-  { id: "q38", section: "الرضا العام", type: "open", required: false, text: "ما المهارات أو السمات التي تراها ضرورية للقادة في أساس؟" },
-  { id: "q39", section: "الرضا العام", type: "open", required: false, text: "أي تعليق أو مقترح تودّ مشاركته مع الإدارة:" },
+  {id:"q_dept", section:"البيانات العامة|General Information", type:"radio", required:false,
+   text:"القسم أو الإدارة|Department / Division",
+   options:["العمليات|Operations","التقنية|Technology","المالية|Finance","الموارد البشرية|Human Resources","أخرى|Other"]},
+  {id:"q_exp", section:"البيانات العامة|General Information", type:"radio", required:false,
+   text:"سنوات الخبرة في الشركة|Years of experience at the company",
+   options:["أقل من سنة|Less than 1 year","١-٣ سنوات|1–3 years","٤-٦ سنوات|4–6 years","٧-١٠ سنوات|7–10 years","أكثر من ١٠ سنوات|More than 10 years"]},
+  {id:"q3", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"rating5", required:true,
+   text:"أنا راضٍ عن مسيرتي الوظيفية الحالية في الشركة.|I am satisfied with my current career path at the company.",
+   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
+  {id:"q4", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"rating5", required:true,
+   text:"أرى مساراً وظيفياً واضحاً أمامي داخل الشركة.|I can see a clear career path ahead of me within the company.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q5", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"rating5", required:true,
+   text:"آلية الترقية في الشركة شفافة وعادلة.|The promotion process at the company is transparent and fair.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q6", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
+   text:"كم مضى على آخر مراجعة لمسماك الوظيفي؟|How long ago was your last job title review?",
+   options:["أقل من سنة|Less than 1 year","١-٣ سنوات|1–3 years","٤-٧ سنوات|4–7 years","أكثر من ٧ سنوات|More than 7 years","لم يُراجَع قط|Never reviewed"]},
+  {id:"q7", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"yesno", required:true,
+   text:"هل تعتقد أن مسماك الوظيفي الحالي يعكس مؤهلاتك وخبراتك الفعلية؟|Do you believe your current job title reflects your actual qualifications and experience?",
+   options:["نعم|Yes","لا|No","لا أعرف|Not Sure"]},
+  {id:"q8", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
+   text:"ما مدى أهمية مراجعة المسميات الوظيفية دورياً في رأيك؟|How important is periodic job title review in your opinion?",
+   options:["غير مهم|Not important","مهم نوعاً ما|Somewhat important","مهم|Important","مهم جداً|Very important","أولوية قصوى|Top priority"]},
+  {id:"q9", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
+   text:"ما التوقع الزمني المنطقي بين الترقيات المتتالية في رأيك؟|What is a reasonable time expectation between consecutive promotions?",
+   options:["سنة واحدة|1 year","٢-٣ سنوات|2–3 years","٣-٤ سنوات|3–4 years","٤-٥ سنوات|4–5 years","حسب الأداء فقط|Performance-based only"]},
+  {id:"q10", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
+   text:"ما الذي تراه أكثر تأثيراً في قرارات الترقية؟|What do you consider most influential in promotion decisions?",
+   options:["الأداء والإنتاجية|Performance & productivity","سنوات الخبرة|Years of experience","المؤهلات والشهادات|Qualifications & certificates","التوصيات الإدارية|Management recommendations","الفرص المتاحة|Available opportunities"]},
+  {id:"q11", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"open", required:false,
+   text:"ما اقتراحاتك لتحسين مسار الترقيات والتطور الوظيفي؟|What are your suggestions for improving the promotion and career development path?"},
+  {id:"q12", section:"التدريب والتطوير المهني|Training & Professional Development", type:"rating5", required:true,
+   text:"الشركة توفر فرص تدريب وتطوير كافية تلبي احتياجاتي المهنية.|The company provides sufficient training and development opportunities that meet my professional needs.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q13", section:"التدريب والتطوير المهني|Training & Professional Development", type:"yesno", required:true,
+   text:"هل تلقيت دعماً من الشركة لحضور دورات تدريبية أو الحصول على شهادات مهنية خارجية؟|Have you received company support to attend external training courses or obtain professional certifications?",
+   options:["نعم|Yes","لا|No","لا أعرف|Not Sure"]},
+  {id:"q14", section:"التدريب والتطوير المهني|Training & Professional Development", type:"radio", required:true,
+   text:"مقارنةً بالشركات الأخرى في القطاع، كيف تقيّم مستوى الدعم التدريبي في أساس؟|Compared to other companies in the sector, how do you rate ASAAS's training support?",
+   options:["أقل بكثير|Much less","أقل قليلاً|Slightly less","مماثل|Similar","أفضل قليلاً|Slightly better","أفضل بكثير|Much better"]},
+  {id:"q17", section:"التدريب والتطوير المهني|Training & Professional Development", type:"open", required:false,
+   text:"ما القطاعات أو المجالات التي تودّ أن تطوّر فيها مهاراتك؟|What sectors or fields would you like to develop your skills in?"},
+  {id:"q18", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"rating5", required:true,
+   text:"تتواصل الإدارة العليا مع الموظفين بشفافية وانتظام.|Senior management communicates with employees transparently and regularly.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q19", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"rating5", required:true,
+   text:"أشعر أن آرائي واقتراحاتي تُؤخذ بجدية من قِبَل الإدارة.|I feel that my opinions and suggestions are taken seriously by management.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q20", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"rating5", required:true,
+   text:"أتلقى معلومات كافية عن التوجه الاستراتيجي للشركة ومستقبلها.|I receive sufficient information about the company's strategic direction and future.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q23", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"open", required:false,
+   text:"ما أكبر فجوة في التواصل تلاحظها بين الموظفين والإدارة؟|What is the biggest communication gap you notice between employees and management?"},
+  {id:"q24", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"rating5", required:true,
+   text:"أفهم التوجه الاستراتيجي لشركة أساس في المرحلة الراهنة بوضوح.|I clearly understand ASAAS's current strategic direction.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q25", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"rating5", required:true,
+   text:"أشعر بالاطمئنان على مستقبلي الوظيفي في الشركة.|I feel confident about my career future at the company.",
+   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
+  {id:"q26", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"radio", required:true,
+   text:"التغييرات والتطورات المؤسسية الأخيرة أثّرت على روحي المعنوية بشكل:|Recent organizational changes affected my morale in a:",
+   options:["سلبي جداً|Very negatively","سلبي نوعاً ما|Somewhat negatively","محايد|Neutral","إيجابي نوعاً ما|Somewhat positively","إيجابي جداً|Very positively"]},
+  {id:"q27", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"radio", required:true,
+   text:"المعلومات التي تلقيتها عن مستقبل الشركة بعد الانتقال إلى مجموعة عمران كانت:|Information I received about the company's future after joining Omran Group was:",
+   options:["غير كافية على الإطلاق|Not sufficient at all","غير كافية|Insufficient","كافية نوعاً ما|Somewhat sufficient","كافية|Sufficient","وافية جداً|Very comprehensive"]},
+  {id:"q28", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"open", required:false,
+   text:"ما المعلومات أو القرارات التي تودّ أن تكون أكثر وضوحاً بالنسبة لك؟|What information or decisions would you like to be clearer to you?"},
+  {id:"q29", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"rating5", required:true,
+   text:"أشعر أن جهودي ومساهماتي تُقدَّر بشكل مناسب من قِبَل الشركة.|I feel that my efforts and contributions are appropriately recognized by the company.",
+   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
+  {id:"q30", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"rating5", required:true,
+   text:"مزايا الموظفين الحالية (صحة، إجازات، مكافآت...) تلبي توقعاتي.|Current employee benefits (health, leave, bonuses…) meet my expectations.",
+   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
+  {id:"q31", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"yesno", required:true,
+   text:"هل تعتقد أنه يجب أن يحظى الموظفون بمزايا من مشاريع الشركة (فنادق، طيران، إلخ)؟|Do you believe employees should receive benefits from company projects (hotels, flights, etc.)?",
+   options:["نعم|Yes","لا|No","لا أعرف|Not Sure"]},
+  {id:"q33", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"open", required:false,
+   text:"اقتراحات محددة لتحسين منظومة المزايا والتقدير:|Specific suggestions to improve the benefits and recognition system:"},
+  {id:"q34", section:"الرضا العام|Overall Satisfaction", type:"rating5", required:true,
+   text:"بشكل عام، مدى رضاك عن بيئة العمل في أساس:|Overall, how satisfied are you with the work environment at ASAAS?",
+   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
+  {id:"q35", section:"الرضا العام|Overall Satisfaction", type:"radio", required:true,
+   text:"ما احتمالية توصيتك لأحد المقربين بالعمل في شركة أساس؟|How likely are you to recommend ASAAS as a place to work to someone close to you?",
+   options:["١-٢ (غير محتمل)|1–2 (Unlikely)","٣-٤|3–4","٥-٦|5–6","٧-٨|7–8","٩-١٠ (محتمل جداً)|9–10 (Very likely)"]},
+  {id:"q36", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
+   text:"ما الشيء الواحد الذي لو تغيّر سيحسن تجربتك في العمل بشكل كبير؟|What is the one thing that, if changed, would significantly improve your work experience?"},
+  {id:"q37", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
+   text:"ما التحدي الذي تشعر أن الإدارة لا تقدّره بما يكفي في الوقت الحالي؟|What challenge do you feel management currently undervalues?"},
+  {id:"q38", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
+   text:"ما المهارات أو السمات التي تراها ضرورية للقادة في أساس؟|What skills or traits do you consider essential for leaders at ASAAS?"},
+  {id:"q39", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
+   text:"أي تعليق أو مقترح تودّ مشاركته مع الإدارة:|Any comment or suggestion you would like to share with management:"},
 ];
 
-const LOGO_SVG = `<svg viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg" width="140" height="70">
-<text x="10" y="40" font-size="28" font-weight="800" fill="#1B3F6E" font-family="Arial,sans-serif">ASAAS</text>
-<text x="10" y="55" font-size="11" fill="#2E73B8" font-family="Arial,sans-serif">أساس</text>
-<rect x="95" y="5" width="6" height="6" fill="#2DADA0" rx="1"/>
-<rect x="103" y="5" width="6" height="6" fill="#4A9B3C" rx="1"/>
-<rect x="95" y="13" width="6" height="6" fill="#2E73B8" rx="1"/>
-<rect x="103" y="13" width="6" height="6" fill="#5BB3E0" rx="1"/>
-</svg>`;
+// ── Helpers ───────────────────────────────────────────────────────────
+const ar = s => s ? s.split("|")[0] : "";
+const en = s => s ? (s.split("|")[1] || "") : "";
 
-
-// ── Storage (localStorage) ──────────────────────────────────────────
-function storageGet(key) {
-  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
-}
-function storageSet(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch { return false; }
-}
-
-
-// ─── Styles ────────────────────────────────────────────────────────
-const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Tajawal', sans-serif; direction: rtl; background: #F5F7FA; color: #1A2332; }
-  .app { min-height: 100vh; }
-  .nav { background: #1B3F6E; color: white; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 64px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
-  .nav-logo { display: flex; align-items: center; gap: 12px; }
-  .nav-logo-icon { width: 36px; height: 36px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
-  .nav-title { font-size: 18px; font-weight: 700; color: white; }
-  .nav-tabs { display: flex; gap: 4px; }
-  .nav-tab { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.7); transition: all 0.2s; border: none; background: transparent; }
-  .nav-tab:hover { background: rgba(255,255,255,0.1); color: white; }
-  .nav-tab.active { background: rgba(255,255,255,0.2); color: white; }
-  .nav-badge { background: #2DADA0; color: white; font-size: 11px; padding: 2px 7px; border-radius: 10px; margin-right: 6px; }
-  .page { max-width: 900px; margin: 0 auto; padding: 32px 20px; }
-  .card { background: white; border-radius: 12px; border: 1px solid #E1E8F0; padding: 24px; margin-bottom: 20px; }
-  .card-sm { background: white; border-radius: 10px; border: 1px solid #E1E8F0; padding: 16px 20px; }
-  .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; font-family: 'Tajawal', sans-serif; }
-  .btn-primary { background: #1B3F6E; color: white; }
-  .btn-primary:hover { background: #2E73B8; }
-  .btn-teal { background: #2DADA0; color: white; }
-  .btn-teal:hover { background: #249B8F; }
-  .btn-danger { background: #E74C3C; color: white; }
-  .btn-danger:hover { background: #C0392B; }
-  .btn-ghost { background: transparent; color: #1B3F6E; border: 1px solid #1B3F6E; }
-  .btn-ghost:hover { background: #F0F4FA; }
-  .btn-sm { padding: 6px 14px; font-size: 13px; }
-  .btn-xs { padding: 4px 10px; font-size: 12px; }
-  .section-header { font-size: 22px; font-weight: 800; color: #1B3F6E; margin-bottom: 8px; }
-  .section-sub { font-size: 14px; color: #6B7A8D; margin-bottom: 24px; }
-  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-  .badge-blue { background: #EBF3FB; color: #1B3F6E; }
-  .badge-teal { background: #E4F6F5; color: #1B6B65; }
-  .badge-green { background: #EBF6E8; color: #2A6B1D; }
-  .badge-orange { background: #FEF3E2; color: #8B5A00; }
-  .badge-red { background: #FDECEA; color: #8B1E1E; }
-  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
-  .metric { background: #F5F7FA; border-radius: 10px; padding: 16px; }
-  .metric-label { font-size: 12px; color: #6B7A8D; margin-bottom: 6px; }
-  .metric-value { font-size: 28px; font-weight: 800; color: #1B3F6E; }
-  .metric-sub { font-size: 12px; color: #6B7A8D; margin-top: 2px; }
-  .q-item { background: white; border: 1px solid #E1E8F0; border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; }
-  .q-text { font-size: 15px; font-weight: 600; color: #1A2332; margin-bottom: 14px; line-height: 1.5; }
-  .q-section-label { font-size: 11px; color: #6B7A8D; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .rating-row { display: flex; gap: 8px; flex-wrap: wrap; }
-  .rating-btn { min-width: 44px; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #E1E8F0; background: white; cursor: pointer; font-size: 14px; font-weight: 600; color: #6B7A8D; transition: all 0.2s; font-family: 'Tajawal', sans-serif; text-align: center; }
-  .rating-btn:hover { border-color: #2E73B8; color: #2E73B8; }
-  .rating-btn.selected { background: #1B3F6E; border-color: #1B3F6E; color: white; }
-  .rating-labels { display: flex; justify-content: space-between; margin-top: 6px; }
-  .rating-label-text { font-size: 11px; color: #6B7A8D; }
-  .radio-group { display: flex; flex-direction: column; gap: 8px; }
-  .radio-opt { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #E1E8F0; cursor: pointer; transition: all 0.2s; background: white; }
-  .radio-opt:hover { border-color: #2E73B8; background: #F0F6FE; }
-  .radio-opt.selected { border-color: #1B3F6E; background: #EBF3FB; }
-  .radio-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #C5D0DC; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .radio-dot.selected { border-color: #1B3F6E; }
-  .radio-dot-inner { width: 8px; height: 8px; border-radius: 50%; background: #1B3F6E; }
-  .radio-text { font-size: 14px; color: #1A2332; }
-  .text-area { width: 100%; padding: 12px 14px; border: 1.5px solid #E1E8F0; border-radius: 8px; font-size: 14px; font-family: 'Tajawal', sans-serif; resize: vertical; min-height: 100px; direction: rtl; outline: none; transition: border-color 0.2s; }
-  .text-area:focus { border-color: #2E73B8; }
-  .input { width: 100%; padding: 10px 14px; border: 1.5px solid #E1E8F0; border-radius: 8px; font-size: 14px; font-family: 'Tajawal', sans-serif; direction: rtl; outline: none; transition: border-color 0.2s; }
-  .input:focus { border-color: #2E73B8; }
-  .select { width: 100%; padding: 10px 14px; border: 1.5px solid #E1E8F0; border-radius: 8px; font-size: 14px; font-family: 'Tajawal', sans-serif; direction: rtl; outline: none; background: white; }
-  .progress-bar-bg { background: #E1E8F0; border-radius: 4px; height: 8px; overflow: hidden; }
-  .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
-  .survey-hero { background: linear-gradient(135deg, #1B3F6E 0%, #2E73B8 100%); border-radius: 16px; padding: 40px 32px; text-align: center; color: white; margin-bottom: 28px; }
-  .survey-hero h1 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
-  .survey-hero p { font-size: 15px; opacity: 0.85; max-width: 500px; margin: 0 auto 20px; line-height: 1.6; }
-  .section-divider { display: flex; align-items: center; gap: 12px; margin: 28px 0 20px; }
-  .section-divider-line { flex: 1; height: 1px; background: #E1E8F0; }
-  .section-divider-text { font-size: 16px; font-weight: 700; color: #1B3F6E; white-space: nowrap; }
-  .success-screen { text-align: center; padding: 60px 20px; }
-  .success-icon { width: 80px; height: 80px; background: #E4F6F5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 40px; }
-  .chart-bar-h { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .chart-bar-label { font-size: 13px; color: #1A2332; min-width: 120px; text-align: right; }
-  .chart-bar-track { flex: 1; height: 24px; background: #F0F4FA; border-radius: 4px; overflow: hidden; }
-  .chart-bar-track-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; }
-  .chart-bar-count { font-size: 12px; color: #6B7A8D; min-width: 40px; }
-  .toggle-wrap { display: flex; align-items: center; gap: 12px; }
-  .toggle { position: relative; width: 48px; height: 26px; }
-  .toggle input { opacity: 0; width: 0; height: 0; }
-  .toggle-slider { position: absolute; inset: 0; background: #C5D0DC; border-radius: 13px; cursor: pointer; transition: 0.2s; }
-  .toggle-slider:before { content: ''; position: absolute; width: 20px; height: 20px; right: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s; }
-  .toggle input:checked + .toggle-slider { background: #2DADA0; }
-  .toggle input:checked + .toggle-slider:before { transform: translateX(-22px); }
-  .table-wrap { overflow-x: auto; }
-  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.data-table th { background: #F5F7FA; padding: 10px 14px; text-align: right; font-weight: 600; color: #6B7A8D; border-bottom: 1px solid #E1E8F0; }
-  table.data-table td { padding: 10px 14px; border-bottom: 1px solid #F0F4FA; color: #1A2332; }
-  table.data-table tr:hover td { background: #FAFBFD; }
-  .ai-bubble { background: #EBF3FB; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; border-right: 4px solid #2E73B8; }
-  .ai-bubble-header { font-size: 12px; color: #2E73B8; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
-  .ai-bubble-text { font-size: 14px; color: #1A2332; line-height: 1.7; }
-  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #E1E8F0; border-top-color: #2E73B8; border-radius: 50%; animation: spin 0.7s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .tab-group { display: flex; border-bottom: 1px solid #E1E8F0; margin-bottom: 24px; }
-  .tab-item { padding: 10px 18px; cursor: pointer; font-size: 14px; font-weight: 500; color: #6B7A8D; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.2s; }
-  .tab-item:hover { color: #1B3F6E; }
-  .tab-item.active { color: #1B3F6E; border-bottom-color: #1B3F6E; }
-  .drag-handle { cursor: grab; color: #C5D0DC; font-size: 18px; margin-left: 8px; }
-  .alert { padding: 12px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 16px; }
-  .alert-info { background: #EBF3FB; color: #1B3F6E; border: 1px solid #B5D4F4; }
-  .alert-success { background: #E8F8F2; color: #1A5E3F; border: 1px solid #9FE1CB; }
-  .alert-warning { background: #FEF3E2; color: #7D4A00; border: 1px solid #FAC775; }
-  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 12px; margin: 2px; }
-  .required-star { color: #E74C3C; margin-right: 3px; }
-  .report-section { margin-bottom: 32px; }
-  .report-section h3 { font-size: 18px; font-weight: 700; color: #1B3F6E; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #E1E8F0; }
-  .score-circle { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; }
-  .flex { display: flex; }
-  .flex-col { flex-direction: column; }
-  .items-center { align-items: center; }
-  .justify-between { justify-content: space-between; }
-  .gap-2 { gap: 8px; }
-  .gap-3 { gap: 12px; }
-  .gap-4 { gap: 16px; }
-  .mt-1 { margin-top: 4px; }
-  .mt-2 { margin-top: 8px; }
-  .mt-3 { margin-top: 12px; }
-  .mt-4 { margin-top: 16px; }
-  .mb-1 { margin-bottom: 4px; }
-  .mb-2 { margin-bottom: 8px; }
-  .mb-3 { margin-bottom: 12px; }
-  .mb-4 { margin-bottom: 16px; }
-  .text-sm { font-size: 13px; }
-  .text-xs { font-size: 12px; }
-  .text-muted { color: #6B7A8D; }
-  .text-bold { font-weight: 700; }
-  .text-navy { color: #1B3F6E; }
-  .text-teal { color: #2DADA0; }
-  .w-full { width: 100%; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media(max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } .nav-tabs { display: none; } .mobile-menu-btn { display: flex; } }
-  .mobile-menu-btn { display: none; }
-  .floating-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #1B3F6E; display: none; padding: 8px 0; z-index: 200; }
-  @media(max-width: 600px) { .floating-nav { display: flex; justify-content: space-around; } }
-  .fnav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; color: rgba(255,255,255,0.6); font-size: 10px; cursor: pointer; padding: 4px; }
-  .fnav-item.active { color: white; }
-  .fnav-icon { font-size: 20px; }
-  @media(max-width: 600px) { .page { padding-bottom: 80px; } }
-`;
-
-// ─── Main App ──────────────────────────────────────────────────────
-function App() {
-  const [page, setPage] = useState("survey");
-  const [questions, setQuestions] = useState(() => storageGet("asaas_questions") || INITIAL_QUESTIONS);
-  const [responses, setResponses] = useState(() => storageGet("asaas_responses") || []);
-  const [surveyActive, setSurveyActive] = useState(() => { const v = storageGet("asaas_active"); return v !== null ? v : true; });
-  const [analysisCache, setAnalysisCache] = useState({});
-
-  const saveQuestions = (qs) => { setQuestions(qs); storageSet("asaas_questions", qs); };
-  const saveResponses = (rs) => { setResponses(rs); storageSet("asaas_responses", rs); };
-  const toggleActive = (val) => { setSurveyActive(val); storageSet("asaas_active", val); };
-
+// ── Bilingual label component ─────────────────────────────────────────
+const Bi = ({ s, tag="span", style={} }) => {
+  const Tag = tag;
   return (
-    <>
-      <style>{css}</style>
-      <div className="app">
-        <nav className="nav">
-          <div className="nav-logo">
-            <div className="nav-logo-icon">
-              <svg viewBox="0 0 28 28" width="24" height="24">
-                <rect x="2" y="2" width="11" height="11" rx="2" fill="#2DADA0"/>
-                <rect x="15" y="2" width="11" height="11" rx="2" fill="#4A9B3C"/>
-                <rect x="2" y="15" width="11" height="11" rx="2" fill="#1B3F6E"/>
-                <rect x="15" y="15" width="11" height="11" rx="2" fill="#5BB3E0"/>
-              </svg>
-            </div>
-            <span className="nav-title">أساس | الاستبيان</span>
-          </div>
-          <div className="nav-tabs">
-            {[["survey","الاستبيان"],["admin","لوحة التحكم"],["analytics","التحليلات"],["report","التقرير"]].map(([id, label]) => (
-              <button key={id} className={`nav-tab ${page === id ? "active" : ""}`} onClick={() => setPage(id)}>
-                {id === "analytics" && responses.length > 0 && <span className="nav-badge">{responses.length}</span>}
-                {label}
-              </button>
-            ))}
-          </div>
-        </nav>
+    <Tag style={style}>
+      {ar(s)}
+      {en(s) && <span className="en">{en(s)}</span>}
+    </Tag>
+  );
+};
 
-        {page === "survey" && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={(r) => { const rs = [...responses, { ...r, id: Date.now(), submittedAt: new Date().toISOString() }]; saveResponses(rs); }} />}
-        {page === "admin" && <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleActive} onSaveQuestions={saveQuestions} onClearResponses={() => { saveResponses([]); setAnalysisCache({}); }} />}
-        {page === "analytics" && <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache} />}
-        {page === "report" && <ReportPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache} />}
+// ── Global CSS ────────────────────────────────────────────────────────
+const GlobalStyle = () => (
+  <style>{`
+    .app{min-height:100vh}
+    .nav{background:#1B3F6E;color:white;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 2px 8px rgba(0,0,0,.15);position:sticky;top:0;z-index:100}
+    .nav-logo{display:flex;align-items:center;gap:12px}
+    .nav-logo-box{width:36px;height:36px;background:white;border-radius:8px;display:flex;align-items:center;justify-content:center}
+    .nav-title{font-size:17px;font-weight:700;color:white;line-height:1.2}
+    .nav-title .en{font-size:10px;opacity:.7;display:block;font-weight:400}
+    .nav-tabs{display:flex;gap:4px}
+    .nav-tab{padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;color:rgba(255,255,255,.7);border:none;background:transparent;font-family:'Tajawal',sans-serif;line-height:1.3;text-align:center;transition:all .2s}
+    .nav-tab:hover{background:rgba(255,255,255,.1);color:white}
+    .nav-tab.active{background:rgba(255,255,255,.2);color:white}
+    .nav-tab .en{font-size:9px;display:block;opacity:.8}
+    .nav-badge{background:#2DADA0;color:white;font-size:10px;padding:1px 6px;border-radius:10px;margin-right:5px}
+    .page{max-width:900px;margin:0 auto;padding:32px 20px}
+    .card{background:white;border-radius:12px;border:1px solid #E1E8F0;padding:24px;margin-bottom:20px}
+    .card-sm{background:white;border-radius:10px;border:1px solid #E1E8F0;padding:14px 18px}
+    .btn{padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:'Tajawal',sans-serif;transition:all .2s;line-height:1.3}
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .btn-primary{background:#1B3F6E;color:white}.btn-primary:hover:not(:disabled){background:#2558A0}
+    .btn-teal{background:#2DADA0;color:white}.btn-teal:hover:not(:disabled){background:#229991}
+    .btn-danger{background:#E74C3C;color:white}.btn-danger:hover:not(:disabled){background:#C0392B}
+    .btn-ghost{background:transparent;color:#1B3F6E;border:1px solid #1B3F6E}.btn-ghost:hover:not(:disabled){background:#F0F4FA}
+    .btn-sm{padding:6px 14px;font-size:12px}
+    .btn-xs{padding:4px 10px;font-size:11px}
+    .sec-hdr{font-size:21px;font-weight:800;color:#1B3F6E;margin-bottom:4px}
+    .sec-hdr .en{font-size:13px;color:#6B7A8D;font-weight:400;display:block;margin-top:2px}
+    .sec-sub{font-size:13px;color:#6B7A8D;margin-bottom:22px}
+    .sec-sub .en{font-size:12px;color:#8A97A8;display:block}
+    .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+    .badge-blue{background:#EBF3FB;color:#1B3F6E}
+    .badge-teal{background:#E4F6F5;color:#1B6B65}
+    .badge-red{background:#FDECEA;color:#8B1E1E}
+    .metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
+    .metric{background:#F5F7FA;border-radius:10px;padding:14px}
+    .metric-lbl{font-size:11px;color:#6B7A8D;margin-bottom:5px;line-height:1.4}
+    .metric-lbl .en{font-size:10px;display:block}
+    .metric-val{font-size:26px;font-weight:800;color:#1B3F6E}
+    .metric-sub{font-size:11px;color:#6B7A8D;margin-top:2px}
+    .q-item{background:white;border:1px solid #E1E8F0;border-radius:10px;padding:16px 18px;margin-bottom:10px}
+    .q-text{font-size:14px;font-weight:600;color:#1A2332;margin-bottom:12px;line-height:1.5}
+    .q-text .en{font-size:12px;font-weight:400;color:#6B7A8D;margin-top:3px;direction:ltr;text-align:right}
+    .rating-row{display:flex;gap:6px;flex-wrap:wrap}
+    .r-btn{min-width:40px;padding:7px 8px;border-radius:8px;border:1.5px solid #E1E8F0;background:white;cursor:pointer;color:#6B7A8D;transition:all .2s;font-family:'Tajawal',sans-serif;text-align:center;flex:1;line-height:1.2}
+    .r-btn:hover{border-color:#2E73B8;color:#2E73B8}
+    .r-btn.sel{background:#1B3F6E;border-color:#1B3F6E;color:white}
+    .r-btn .r-num{font-size:15px;font-weight:800;display:block}
+    .r-btn .r-ar{font-size:9px;display:block;opacity:.85;margin-top:1px}
+    .r-btn .r-en{font-size:8px;display:block;opacity:.7;direction:ltr}
+    .radio-grp{display:flex;flex-direction:column;gap:7px}
+    .radio-opt{display:flex;align-items:center;gap:10px;padding:9px 13px;border-radius:8px;border:1.5px solid #E1E8F0;cursor:pointer;transition:all .2s;background:white}
+    .radio-opt:hover{border-color:#2E73B8;background:#F0F6FE}
+    .radio-opt.sel{border-color:#1B3F6E;background:#EBF3FB}
+    .rdot{width:17px;height:17px;border-radius:50%;border:2px solid #C5D0DC;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .rdot.sel{border-color:#1B3F6E}
+    .rdot-inner{width:7px;height:7px;border-radius:50%;background:#1B3F6E}
+    .r-opt-text{font-size:13px;color:#1A2332;line-height:1.3}
+    .r-opt-text .en{font-size:11px;color:#6B7A8D;direction:ltr;display:block}
+    .txt-area{width:100%;padding:11px 13px;border:1.5px solid #E1E8F0;border-radius:8px;font-size:13px;font-family:'Tajawal',sans-serif;resize:vertical;min-height:90px;direction:rtl;outline:none;transition:border-color .2s}
+    .txt-area:focus{border-color:#2E73B8}
+    .inp{width:100%;padding:9px 13px;border:1.5px solid #E1E8F0;border-radius:8px;font-size:13px;font-family:'Tajawal',sans-serif;direction:rtl;outline:none;transition:border-color .2s}
+    .inp:focus{border-color:#2E73B8}
+    .sel-field{width:100%;padding:9px 13px;border:1.5px solid #E1E8F0;border-radius:8px;font-size:13px;font-family:'Tajawal',sans-serif;direction:rtl;outline:none;background:white}
+    .prog-bg{background:#E1E8F0;border-radius:4px;height:7px;overflow:hidden}
+    .prog-fill{height:100%;border-radius:4px;transition:width .4s}
+    .hero{background:linear-gradient(135deg,#1B3F6E 0%,#2E73B8 100%);border-radius:16px;padding:36px 28px;text-align:center;color:white;margin-bottom:24px}
+    .hero h1{font-size:23px;font-weight:800;margin-bottom:4px}
+    .hero .hero-en{font-size:14px;opacity:.8;margin-bottom:10px;font-weight:400}
+    .hero p{font-size:13px;opacity:.85;max-width:480px;margin:0 auto 6px;line-height:1.6}
+    .hero .hero-p-en{font-size:12px;opacity:.7;max-width:480px;margin:0 auto 18px;line-height:1.5}
+    .hero-prog{background:rgba(255,255,255,.15);border-radius:8px;padding:9px 14px;display:inline-flex;align-items:center;gap:10px;font-size:12px}
+    .sec-div{display:flex;align-items:center;gap:12px;margin:24px 0 16px}
+    .sec-div-line{flex:1;height:1px;background:#E1E8F0}
+    .sec-div-text{font-size:14px;font-weight:700;color:#1B3F6E;white-space:nowrap;text-align:center;line-height:1.3}
+    .sec-div-text .en{font-size:10px;font-weight:400;color:#6B7A8D;display:block}
+    .ok-screen{text-align:center;padding:56px 20px}
+    .ok-icon{width:76px;height:76px;background:#E4F6F5;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:38px}
+    .bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .bar-lbl{font-size:12px;color:#1A2332;min-width:110px;text-align:right;line-height:1.3}
+    .bar-lbl .en{font-size:10px;color:#6B7A8D;display:block;direction:ltr;text-align:right}
+    .bar-track{flex:1;height:22px;background:#F0F4FA;border-radius:4px;overflow:hidden}
+    .bar-fill{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 7px;transition:width .4s}
+    .bar-pct{font-size:11px;color:#6B7A8D;min-width:36px}
+    .toggle{position:relative;width:46px;height:25px;display:inline-block}
+    .toggle input{opacity:0;width:0;height:0;position:absolute}
+    .tog-sl{position:absolute;inset:0;background:#C5D0DC;border-radius:13px;cursor:pointer;transition:.2s}
+    .tog-sl:before{content:'';position:absolute;width:19px;height:19px;right:3px;top:3px;background:white;border-radius:50%;transition:.2s}
+    .toggle input:checked+.tog-sl{background:#2DADA0}
+    .toggle input:checked+.tog-sl:before{transform:translateX(-21px)}
+    .tbl-wrap{overflow-x:auto}
+    table.dtbl{width:100%;border-collapse:collapse;font-size:12px}
+    table.dtbl th{background:#F5F7FA;padding:9px 12px;text-align:right;font-weight:600;color:#6B7A8D;border-bottom:1px solid #E1E8F0;line-height:1.4}
+    table.dtbl th .en{font-size:10px;font-weight:400;display:block}
+    table.dtbl td{padding:9px 12px;border-bottom:1px solid #F0F4FA;color:#1A2332}
+    table.dtbl tr:hover td{background:#FAFBFD}
+    .ai-box{background:#EBF3FB;border-radius:12px;padding:14px 16px;margin-bottom:14px;border-right:4px solid #2E73B8}
+    .ai-hdr{font-size:11px;color:#2E73B8;font-weight:700;margin-bottom:7px;line-height:1.4}
+    .ai-hdr .en{font-size:10px;font-weight:400;display:block;opacity:.8}
+    .ai-txt{font-size:13px;color:#1A2332;line-height:1.75}
+    .spinner{display:inline-block;width:18px;height:18px;border:2px solid #E1E8F0;border-top-color:#2E73B8;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .tabs{display:flex;border-bottom:1px solid #E1E8F0;margin-bottom:22px}
+    .tab{padding:9px 16px;cursor:pointer;font-size:13px;font-weight:500;color:#6B7A8D;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;line-height:1.3}
+    .tab:hover{color:#1B3F6E}
+    .tab.active{color:#1B3F6E;border-bottom-color:#1B3F6E}
+    .tab .en{font-size:10px;display:block;opacity:.8}
+    .alert{padding:11px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;line-height:1.5}
+    .alert .en{font-size:11px;display:block;margin-top:2px;opacity:.85}
+    .alert-info{background:#EBF3FB;color:#1B3F6E;border:1px solid #B5D4F4}
+    .alert-warn{background:#FEF3E2;color:#7D4A00;border:1px solid #FAC775}
+    .chip{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:6px;font-size:11px;margin:2px}
+    .req-star{color:#E74C3C;margin-right:3px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .fl{display:flex}.aic{align-items:center}.jb{justify-content:space-between}.g2{gap:8px}.g3{gap:12px}
+    .mt2{margin-top:8px}.mt3{margin-top:12px}.mb2{margin-bottom:8px}.mb3{margin-bottom:12px}.mb4{margin-bottom:16px}
+    .ts{font-size:12px}.tx{font-size:11px}.tmuted{color:#6B7A8D}.tbold{font-weight:700}
+    .fnav{position:fixed;bottom:0;left:0;right:0;background:#1B3F6E;display:none;padding:6px 0;z-index:200}
+    .fni{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;color:rgba(255,255,255,.6);font-size:9px;cursor:pointer;padding:4px;line-height:1.3}
+    .fni.active{color:white}
+    .fni-icon{font-size:19px}
+    @media(max-width:640px){
+      .grid2{grid-template-columns:1fr}
+      .nav-tabs{display:none}
+      .fnav{display:flex;justify-content:space-around}
+      .page{padding-bottom:76px}
+      .hero{padding:24px 16px}
+      .hero h1{font-size:18px}
+    }
+  `}</style>
+);
 
-        <div className="floating-nav">
-          {[["survey","📋","الاستبيان"],["admin","⚙️","الإدارة"],["analytics","📊","التحليلات"],["report","📄","التقرير"]].map(([id, icon, label]) => (
-            <div key={id} className={`fnav-item ${page === id ? "active" : ""}`} onClick={() => setPage(id)}>
-              <span className="fnav-icon">{icon}</span>
-              <span>{label}</span>
+// ── Bar Chart ─────────────────────────────────────────────────────────
+function BarChart({data, total, color}) {
+  const max = Math.max(...data.map(d => d.count), 1);
+  return (
+    <div>
+      {data.map(({label, count}, i) => (
+        <div key={i} className="bar-row">
+          <div className="bar-lbl">
+            {ar(label)}
+            {en(label) && <span className="en">{en(label)}</span>}
+          </div>
+          <div className="bar-track">
+            <div className="bar-fill" style={{width:`${Math.round((count/max)*100)}%`,background:color}}>
+              {count > 0 && <span style={{fontSize:10,color:"white",fontWeight:700}}>{count}</span>}
             </div>
-          ))}
+          </div>
+          <div className="bar-pct">{total > 0 ? Math.round((count/total)*100) : 0}%</div>
         </div>
-      </div>
-    </>
+      ))}
+    </div>
   );
 }
 
-// ─── Survey Page ───────────────────────────────────────────────────
-function SurveyPage({ questions, surveyActive, onSubmit }) {
+// ── Question Input ────────────────────────────────────────────────────
+function QInput({q, value, onChange}) {
+  if (q.type === "rating5") {
+    return (
+      <div className="rating-row">
+        {(q.labels||[]).map((lbl, i) => (
+          <button key={i} className={`r-btn${value===i+1?" sel":""}`} onClick={() => onChange(i+1)}>
+            <span className="r-num">{i+1}</span>
+            <span className="r-ar">{ar(lbl)}</span>
+            {en(lbl) && <span className="r-en">{en(lbl)}</span>}
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (q.type==="radio"||q.type==="yesno") {
+    return (
+      <div className="radio-grp">
+        {(q.options||[]).map((opt, i) => (
+          <div key={i} className={`radio-opt${value===opt?" sel":""}`} onClick={() => onChange(opt)}>
+            <div className={`rdot${value===opt?" sel":""}`}>{value===opt&&<div className="rdot-inner"/>}</div>
+            <span className="r-opt-text">
+              {ar(opt)}
+              {en(opt) && <span className="en">{en(opt)}</span>}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (q.type==="open") {
+    return <textarea className="txt-area" placeholder="اكتب إجابتك هنا... / Write your answer here..." value={value||""} onChange={e=>onChange(e.target.value)}/>;
+  }
+  return null;
+}
+
+// ── Survey Page ───────────────────────────────────────────────────────
+function SurveyPage({questions, surveyActive, onSubmit}) {
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-
   const sections = [...new Set(questions.map(q => q.section))];
-  const totalRequired = questions.filter(q => q.required).length;
-  const answeredRequired = questions.filter(q => q.required && answers[q.id] !== undefined && answers[q.id] !== "").length;
-  const progress = totalRequired > 0 ? Math.round((answeredRequired / totalRequired) * 100) : 0;
+  const totalReq = questions.filter(q=>q.required).length;
+  const doneReq = questions.filter(q=>q.required&&answers[q.id]!==undefined&&answers[q.id]!=="").length;
+  const prog = totalReq>0 ? Math.round((doneReq/totalReq)*100) : 0;
 
   if (!surveyActive) return (
-    <div className="page">
-      <div className="success-screen">
-        <div className="success-icon">🔒</div>
-        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>الاستبيان غير متاح حالياً</h2>
-        <p style={{ color: "#6B7A8D", fontSize: 15 }}>تم إيقاف الاستبيان مؤقتاً من قِبَل الإدارة.</p>
-      </div>
-    </div>
+    <div className="page"><div className="ok-screen">
+      <div className="ok-icon">🔒</div>
+      <h2 style={{fontSize:20,fontWeight:800,color:"#1B3F6E",marginBottom:6}}>
+        الاستبيان غير متاح حالياً
+        <span className="en">Survey is currently unavailable</span>
+      </h2>
+      <p style={{color:"#6B7A8D",fontSize:13}}>تم إيقاف الاستبيان مؤقتاً من قِبَل الإدارة.</p>
+      <p style={{color:"#8A97A8",fontSize:12,marginTop:4}}>The survey has been temporarily paused by management.</p>
+    </div></div>
   );
 
   if (submitted) return (
-    <div className="page">
-      <div className="success-screen">
-        <div className="success-icon">✅</div>
-        <h2 style={{ fontSize: 24, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>شكراً على مشاركتك!</h2>
-        <p style={{ color: "#6B7A8D", fontSize: 15, maxWidth: 400, margin: "0 auto 24px", lineHeight: 1.7 }}>تم استلام إجاباتك بنجاح. ستُعالَج بسرية تامة وستُسهم في تحسين بيئة العمل.</p>
-        <button className="btn btn-teal" onClick={() => { setAnswers({}); setSubmitted(false); }}>ملء استبيان جديد</button>
-      </div>
-    </div>
+    <div className="page"><div className="ok-screen">
+      <div className="ok-icon">✅</div>
+      <h2 style={{fontSize:22,fontWeight:800,color:"#1B3F6E",marginBottom:6}}>
+        شكراً على مشاركتك!
+        <span className="en">Thank you for your participation!</span>
+      </h2>
+      <p style={{color:"#6B7A8D",fontSize:13,maxWidth:400,margin:"0 auto 8px",lineHeight:1.7}}>تم استلام إجاباتك بنجاح. ستُعالَج بسرية تامة.</p>
+      <p style={{color:"#8A97A8",fontSize:12,maxWidth:400,margin:"0 auto 22px",lineHeight:1.7}}>Your responses have been received. They will be treated with complete confidentiality.</p>
+      <button className="btn btn-teal" onClick={() => {setAnswers({});setSubmitted(false);}}>
+        ملء استبيان جديد <span style={{fontSize:11,opacity:.85}}>/ Fill a new survey</span>
+      </button>
+    </div></div>
   );
 
-  const setAnswer = (id, val) => {
-    setAnswers(a => ({ ...a, [id]: val }));
-    setErrors(e => { const n = { ...e }; delete n[id]; return n; });
+  const setAnswer = (id,val) => {
+    setAnswers(a=>({...a,[id]:val}));
+    setErrors(e=>{const n={...e};delete n[id];return n;});
   };
 
-  const handleSubmit = async () => {
-    const newErrors = {};
-    questions.filter(q => q.required).forEach(q => {
-      if (!answers[q.id] || answers[q.id] === "") newErrors[q.id] = true;
-    });
-    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+  const handleSubmit = () => {
+    const errs = {};
+    questions.filter(q=>q.required).forEach(q=>{if(!answers[q.id]||answers[q.id]==="")errs[q.id]=true;});
+    if(Object.keys(errs).length>0){setErrors(errs);return;}
     setSubmitting(true);
-    await onSubmit(answers);
+    onSubmit(answers);
     setSubmitting(false);
     setSubmitted(true);
   };
 
   return (
     <div className="page">
-      <div className="survey-hero">
+      <div className="hero">
         <h1>استبيان رضا الموظفين وتطلعاتهم</h1>
+        <div className="hero-en">Employee Satisfaction & Aspirations Survey</div>
         <p>آراؤكم هي البوصلة التي نسترشد بها لبناء بيئة عمل أفضل. جميع الإجابات سرية تماماً.</p>
-        <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13 }}>التقدم: {progress}%</span>
-          <div style={{ width: 160, height: 6, background: "rgba(255,255,255,0.3)", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{ width: `${progress}%`, height: "100%", background: "#2DADA0", borderRadius: 3, transition: "width 0.3s" }}></div>
+        <p className="hero-p-en">Your opinions are our compass for building a better workplace. All responses are completely confidential.</p>
+        <div className="hero-prog">
+          <span>التقدم / Progress: {prog}%</span>
+          <div style={{width:140,height:5,background:"rgba(255,255,255,.3)",borderRadius:3,overflow:"hidden"}}>
+            <div style={{width:`${prog}%`,height:"100%",background:"#2DADA0",borderRadius:3,transition:"width .3s"}}></div>
           </div>
         </div>
       </div>
-
-      <div className="alert alert-info">🔒 جميع إجاباتكم ستُعامَل بسرية تامة — المدة المتوقعة: 10-15 دقيقة</div>
-
-      {sections.map(section => {
-        const sectionQs = questions.filter(q => q.section === section);
-        return (
-          <div key={section}>
-            <div className="section-divider">
-              <div className="section-divider-line"></div>
-              <div className="section-divider-text">📌 {section}</div>
-              <div className="section-divider-line"></div>
+      <div className="alert alert-info">
+        🔒 جميع إجاباتكم ستُعامَل بسرية تامة — المدة المتوقعة: 10-15 دقيقة
+        <span className="en">All responses will be treated with complete confidentiality — Estimated time: 10–15 minutes</span>
+      </div>
+      {sections.map(sec => (
+        <div key={sec}>
+          <div className="sec-div">
+            <div className="sec-div-line"/>
+            <div className="sec-div-text">
+              📌 {ar(sec)}
+              {en(sec) && <span className="en">{en(sec)}</span>}
             </div>
-            {sectionQs.map(q => (
-              <div key={q.id} className="q-item" style={errors[q.id] ? { border: "1.5px solid #E74C3C" } : {}}>
-                <div className="q-text">
-                  {q.required && <span className="required-star">*</span>}
-                  {q.text}
-                </div>
-                <QuestionInput q={q} value={answers[q.id]} onChange={(v) => setAnswer(q.id, v)} />
-                {errors[q.id] && <p style={{ color: "#E74C3C", fontSize: 12, marginTop: 6 }}>هذا السؤال مطلوب</p>}
-              </div>
-            ))}
+            <div className="sec-div-line"/>
           </div>
-        );
-      })}
-
-      <div style={{ textAlign: "center", paddingTop: 16 }}>
-        <button className="btn btn-primary" style={{ padding: "14px 48px", fontSize: 16 }} onClick={handleSubmit} disabled={submitting}>
-          {submitting ? <span className="spinner"></span> : "إرسال الاستبيان ✉️"}
+          {questions.filter(q=>q.section===sec).map(q => (
+            <div key={q.id} className="q-item" style={errors[q.id]?{border:"1.5px solid #E74C3C"}:{}}>
+              <div className="q-text">
+                {q.required && <span className="req-star">*</span>}
+                {ar(q.text)}
+                {en(q.text) && <span className="en">{en(q.text)}</span>}
+              </div>
+              <QInput q={q} value={answers[q.id]} onChange={v=>setAnswer(q.id,v)}/>
+              {errors[q.id] && (
+                <p style={{color:"#E74C3C",fontSize:11,marginTop:5}}>
+                  هذا السؤال مطلوب / <em>This field is required</em>
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+      <div style={{textAlign:"center",paddingTop:14}}>
+        <button className="btn btn-primary" style={{padding:"13px 44px",fontSize:15}} onClick={handleSubmit} disabled={submitting}>
+          {submitting ? <span className="spinner"/> : <>إرسال الاستبيان ✉️ <span style={{fontSize:12,opacity:.85}}>/ Submit Survey</span></>}
         </button>
       </div>
     </div>
   );
 }
 
-function QuestionInput({ q, value, onChange }) {
-  if (q.type === "rating5") {
-    return (
-      <div>
-        <div className="rating-row">
-          {(q.labels || ["١","٢","٣","٤","٥"]).map((lbl, i) => (
-            <button key={i} className={`rating-btn ${value === i + 1 ? "selected" : ""}`} onClick={() => onChange(i + 1)} style={{ flex: 1 }}>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{i + 1}</div>
-              <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.8, lineHeight: 1.2, marginTop: 2 }}>{lbl}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (q.type === "radio" || q.type === "yesno") {
-    const opts = q.options || q.labels || [];
-    return (
-      <div className="radio-group">
-        {opts.map((opt, i) => (
-          <div key={i} className={`radio-opt ${value === opt ? "selected" : ""}`} onClick={() => onChange(opt)}>
-            <div className={`radio-dot ${value === opt ? "selected" : ""}`}>{value === opt && <div className="radio-dot-inner"></div>}</div>
-            <span className="radio-text">{opt}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (q.type === "open") {
-    return <textarea className="text-area" placeholder="اكتب إجابتك هنا..." value={value || ""} onChange={e => onChange(e.target.value)} />;
-  }
-  return null;
-}
-
-// ─── Admin Page ────────────────────────────────────────────────────
-function AdminPage({ questions, responses, surveyActive, onToggleActive, onSaveQuestions, onClearResponses }) {
+// ── Admin Page ────────────────────────────────────────────────────────
+function AdminPage({questions, responses, surveyActive, onToggleActive, onSaveQuestions, onClearResponses}) {
   const [tab, setTab] = useState("questions");
-  const [editing, setEditing] = useState(null);
-  const [showNewForm, setShowNewForm] = useState(false);
+  const [showNew, setShowNew] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
-  const [newQ, setNewQ] = useState({ text: "", type: "rating5", section: "الرضا العام", required: true, options: ["خيار ١", "خيار ٢", "خيار ٣"], labels: ["لا أوافق بشدة","لا أوافق","محايد","أوافق","أوافق بشدة"] });
+  const [nq, setNq] = useState({text:"",type:"rating5",section:"الرضا العام|Overall Satisfaction",required:true,opts:"خيار ١|Option 1، خيار ٢|Option 2، خيار ٣|Option 3"});
+  const sections = [...new Set(questions.map(q=>q.section))];
 
-  const sections = [...new Set(questions.map(q => q.section))];
-
-  const deleteQ = (id) => onSaveQuestions(questions.filter(q => q.id !== id));
-  const toggleRequired = (id) => onSaveQuestions(questions.map(q => q.id === id ? { ...q, required: !q.required } : q));
-  const moveUp = (idx) => { if (idx === 0) return; const qs = [...questions]; [qs[idx-1], qs[idx]] = [qs[idx], qs[idx-1]]; onSaveQuestions(qs); };
-  const moveDown = (idx) => { if (idx === questions.length - 1) return; const qs = [...questions]; [qs[idx], qs[idx+1]] = [qs[idx+1], qs[idx]]; onSaveQuestions(qs); };
-
-  const addQuestion = () => {
-    const q = { ...newQ, id: "q_" + Date.now(), options: newQ.type === "open" ? [] : newQ.options };
-    onSaveQuestions([...questions, q]);
-    setShowNewForm(false);
-    setNewQ({ text: "", type: "rating5", section: "الرضا العام", required: true, options: ["خيار ١", "خيار ٢", "خيار ٣"], labels: ["لا أوافق بشدة","لا أوافق","محايد","أوافق","أوافق بشدة"] });
+  const delQ = id => onSaveQuestions(questions.filter(q=>q.id!==id));
+  const togReq = id => onSaveQuestions(questions.map(q=>q.id===id?{...q,required:!q.required}:q));
+  const moveUp = i => {if(i===0)return;const qs=[...questions];[qs[i-1],qs[i]]=[qs[i],qs[i-1]];onSaveQuestions(qs);};
+  const moveDown = i => {if(i>=questions.length-1)return;const qs=[...questions];[qs[i],qs[i+1]]=[qs[i+1],qs[i]];onSaveQuestions(qs);};
+  const addQ = () => {
+    if(!nq.text.trim())return;
+    const q={id:"q_"+Date.now(),text:nq.text,type:nq.type,section:nq.section,required:nq.required,
+      options:nq.type!=="open"&&nq.type!=="rating5"?nq.opts.split("،").map(s=>s.trim()).filter(Boolean):[],
+      labels:nq.type==="rating5"?["١|1","٢|2","٣|3","٤|4","٥|5"]:[]};
+    onSaveQuestions([...questions,q]);
+    setShowNew(false);
+    setNq({text:"",type:"rating5",section:"الرضا العام|Overall Satisfaction",required:true,opts:"خيار ١|Option 1، خيار ٢|Option 2، خيار ٣|Option 3"});
   };
 
   return (
     <div className="page">
-      <div className="flex items-center justify-between mb-4">
+      <div className="fl aic jb mb4">
         <div>
-          <h2 className="section-header">لوحة التحكم</h2>
-          <p className="section-sub">إدارة الاستبيان والأسئلة والإجابات</p>
+          <h2 className="sec-hdr">لوحة التحكم <span className="en">Admin Dashboard</span></h2>
+          <p className="sec-sub">إدارة الاستبيان والأسئلة والإجابات <span className="en">Manage survey, questions and responses</span></p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted">حالة الاستبيان:</span>
-          <label className="toggle">
-            <input type="checkbox" checked={surveyActive} onChange={e => onToggleActive(e.target.checked)} />
-            <span className="toggle-slider"></span>
-          </label>
-          <span className={`badge ${surveyActive ? "badge-teal" : "badge-red"}`}>{surveyActive ? "مفعّل" : "موقوف"}</span>
+        <div className="fl aic g3">
+          <span className="ts tmuted">حالة الاستبيان / Status:</span>
+          <label className="toggle"><input type="checkbox" checked={surveyActive} onChange={e=>onToggleActive(e.target.checked)}/><span className="tog-sl"/></label>
+          <span className={`badge ${surveyActive?"badge-teal":"badge-red"}`}>{surveyActive?"مفعّل / Active":"موقوف / Paused"}</span>
         </div>
       </div>
-
       <div className="metric-grid">
-        <div className="metric"><div className="metric-label">إجمالي الإجابات</div><div className="metric-value">{responses.length}</div></div>
-        <div className="metric"><div className="metric-label">عدد الأسئلة</div><div className="metric-value">{questions.length}</div></div>
-        <div className="metric"><div className="metric-label">الأقسام</div><div className="metric-value">{sections.length}</div></div>
-        <div className="metric"><div className="metric-label">آخر إجابة</div><div className="metric-value" style={{ fontSize: 14 }}>{responses.length > 0 ? new Date(responses[responses.length-1].submittedAt).toLocaleDateString("ar-OM") : "—"}</div></div>
+        <div className="metric"><div className="metric-lbl">إجمالي الإجابات<span className="en">Total Responses</span></div><div className="metric-val">{responses.length}</div></div>
+        <div className="metric"><div className="metric-lbl">عدد الأسئلة<span className="en">Questions</span></div><div className="metric-val">{questions.length}</div></div>
+        <div className="metric"><div className="metric-lbl">الأقسام<span className="en">Sections</span></div><div className="metric-val">{sections.length}</div></div>
+        <div className="metric"><div className="metric-lbl">آخر إجابة<span className="en">Last Response</span></div><div className="metric-val" style={{fontSize:13}}>{responses.length>0?new Date(responses[responses.length-1].submittedAt).toLocaleDateString("en-GB"):"—"}</div></div>
       </div>
-
-      <div className="tab-group">
-        {[["questions","الأسئلة"],["responses","الإجابات"]].map(([id, label]) => (
-          <div key={id} className={`tab-item ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>{label}</div>
+      <div className="tabs">
+        {[["questions","الأسئلة","Questions"],["responses","الإجابات","Responses"]].map(([id,a,e])=>(
+          <div key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}>{a}<span className="en">{e}</span></div>
         ))}
       </div>
 
-      {tab === "questions" && (
+      {tab==="questions" && (
         <div>
-          <div className="flex justify-between mb-3">
-            <span className="text-sm text-muted">{questions.length} سؤال في الاستبيان</span>
-            <button className="btn btn-teal btn-sm" onClick={() => setShowNewForm(true)}>+ إضافة سؤال</button>
+          <div className="fl jb mb3">
+            <span className="ts tmuted">{questions.length} سؤال / questions</span>
+            <button className="btn btn-teal btn-sm" onClick={()=>setShowNew(v=>!v)}>+ إضافة سؤال / Add Question</button>
           </div>
-
-          {showNewForm && (
-            <div className="card" style={{ border: "2px solid #2DADA0", marginBottom: 20 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1B3F6E", marginBottom: 16 }}>إضافة سؤال جديد</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {showNew && (
+            <div className="card" style={{border:"2px solid #2DADA0",marginBottom:18}}>
+              <h3 style={{fontSize:14,fontWeight:700,color:"#1B3F6E",marginBottom:14}}>
+                إضافة سؤال جديد <span style={{fontSize:11,fontWeight:400,color:"#6B7A8D"}}>/ Add new question</span>
+              </h3>
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
                 <div>
-                  <label className="text-sm text-muted mb-1">نص السؤال</label>
-                  <input className="input" value={newQ.text} onChange={e => setNewQ(n => ({ ...n, text: e.target.value }))} placeholder="اكتب نص السؤال..." />
+                  <label className="ts tmuted">نص السؤال / Question text</label>
+                  <input className="inp" style={{marginTop:4}} value={nq.text} onChange={e=>setNq(n=>({...n,text:e.target.value}))} placeholder="اكتب السؤال... / Write the question..."/>
                 </div>
-                <div className="grid-2">
+                <div className="grid2">
                   <div>
-                    <label className="text-sm text-muted mb-1">نوع السؤال</label>
-                    <select className="select" value={newQ.type} onChange={e => setNewQ(n => ({ ...n, type: e.target.value }))}>
-                      <option value="rating5">تقييم خماسي</option>
-                      <option value="radio">اختيار من متعدد</option>
-                      <option value="yesno">نعم / لا</option>
-                      <option value="open">سؤال مفتوح</option>
+                    <label className="ts tmuted">النوع / Type</label>
+                    <select className="sel-field" style={{marginTop:4}} value={nq.type} onChange={e=>setNq(n=>({...n,type:e.target.value}))}>
+                      <option value="rating5">تقييم خماسي / 5-point rating</option>
+                      <option value="radio">اختيار متعدد / Multiple choice</option>
+                      <option value="yesno">نعم / لا — Yes / No</option>
+                      <option value="open">مفتوح / Open-ended</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-sm text-muted mb-1">القسم</label>
-                    <input className="input" value={newQ.section} onChange={e => setNewQ(n => ({ ...n, section: e.target.value }))} placeholder="اسم القسم" />
+                    <label className="ts tmuted">القسم / Section</label>
+                    <input className="inp" style={{marginTop:4}} value={nq.section} onChange={e=>setNq(n=>({...n,section:e.target.value}))} placeholder="اسم القسم / Section name"/>
                   </div>
                 </div>
-                {(newQ.type === "radio") && (
+                {nq.type==="radio" && (
                   <div>
-                    <label className="text-sm text-muted mb-1">الخيارات (مفصولة بفاصلة)</label>
-                    <input className="input" value={newQ.options.join("، ")} onChange={e => setNewQ(n => ({ ...n, options: e.target.value.split("،").map(s => s.trim()) }))} />
+                    <label className="ts tmuted">الخيارات (مفصولة بـ ،) / Options (separated by ،)</label>
+                    <input className="inp" style={{marginTop:4}} value={nq.opts} onChange={e=>setNq(n=>({...n,opts:e.target.value}))}/>
                   </div>
                 )}
-                <div className="flex items-center gap-3 mt-2">
-                  <label className="toggle"><input type="checkbox" checked={newQ.required} onChange={e => setNewQ(n => ({ ...n, required: e.target.checked }))} /><span className="toggle-slider"></span></label>
-                  <span className="text-sm">سؤال مطلوب</span>
+                <div className="fl aic g3">
+                  <label className="toggle"><input type="checkbox" checked={nq.required} onChange={e=>setNq(n=>({...n,required:e.target.checked}))}/><span className="tog-sl"/></label>
+                  <span className="ts">مطلوب / Required</span>
                 </div>
-                <div className="flex gap-2 mt-2">
-                  <button className="btn btn-teal btn-sm" onClick={addQuestion} disabled={!newQ.text}>حفظ السؤال</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setShowNewForm(false)}>إلغاء</button>
+                <div className="fl g2 mt2">
+                  <button className="btn btn-teal btn-sm" onClick={addQ}>حفظ / Save</button>
+                  <button className="btn btn-ghost btn-sm" onClick={()=>setShowNew(false)}>إلغاء / Cancel</button>
                 </div>
               </div>
             </div>
           )}
-
-          {sections.map(section => (
-            <div key={section}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#1B3F6E", margin: "20px 0 10px", display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ background: "#EBF3FB", padding: "3px 10px", borderRadius: 6 }}>{section}</span>
-                <span className="text-xs text-muted">({questions.filter(q => q.section === section).length} أسئلة)</span>
+          {sections.map(sec => (
+            <div key={sec}>
+              <div style={{fontSize:13,fontWeight:700,color:"#1B3F6E",margin:"18px 0 8px",display:"flex",alignItems:"center",gap:8}}>
+                <span style={{background:"#EBF3FB",padding:"3px 10px",borderRadius:6}}>
+                  {ar(sec)} <span style={{fontWeight:400,fontSize:11,color:"#6B7A8D"}}>/ {en(sec)}</span>
+                </span>
               </div>
-              {questions.map((q, idx) => q.section !== section ? null : (
-                <div key={q.id} className="card-sm flex items-center gap-3 mb-2" style={{ position: "relative" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <button onClick={() => moveUp(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#C5D0DC", fontSize: 12, lineHeight: 1 }}>▲</button>
-                    <button onClick={() => moveDown(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#C5D0DC", fontSize: 12, lineHeight: 1 }}>▼</button>
+              {questions.map((q,idx)=>q.section!==sec?null:(
+                <div key={q.id} className="card-sm fl aic g3 mb2">
+                  <div style={{display:"flex",flexDirection:"column",gap:1}}>
+                    <button onClick={()=>moveUp(idx)} style={{background:"none",border:"none",cursor:"pointer",color:"#C5D0DC",fontSize:11,lineHeight:1,fontFamily:"monospace"}}>▲</button>
+                    <button onClick={()=>moveDown(idx)} style={{background:"none",border:"none",cursor:"pointer",color:"#C5D0DC",fontSize:11,lineHeight:1,fontFamily:"monospace"}}>▼</button>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, color: "#1A2332", fontWeight: 500, lineHeight: 1.5 }}>{q.text}</div>
-                    <div className="flex gap-2 mt-1" style={{ flexWrap: "wrap" }}>
-                      <span className="chip" style={{ background: "#EBF3FB", color: "#1B3F6E" }}>{q.type === "rating5" ? "تقييم" : q.type === "radio" ? "اختيار" : q.type === "yesno" ? "نعم/لا" : "مفتوح"}</span>
-                      {q.required && <span className="chip" style={{ background: "#FDECEA", color: "#8B1E1E" }}>مطلوب</span>}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:500,lineHeight:1.5}}>
+                      {ar(q.text)}
+                      {en(q.text) && <span style={{fontSize:11,color:"#6B7A8D",display:"block",direction:"ltr",textAlign:"right"}}>{en(q.text)}</span>}
+                    </div>
+                    <div className="fl g2 mt2" style={{flexWrap:"wrap"}}>
+                      <span className="chip" style={{background:"#EBF3FB",color:"#1B3F6E"}}>{q.type==="rating5"?"تقييم/Rating":q.type==="radio"?"اختيار/Choice":q.type==="yesno"?"نعم-لا/Yes-No":"مفتوح/Open"}</span>
+                      {q.required&&<span className="chip" style={{background:"#FDECEA",color:"#8B1E1E"}}>مطلوب/Required</span>}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button className="btn btn-ghost btn-xs" onClick={() => toggleRequired(q.id)}>{q.required ? "اختياري" : "مطلوب"}</button>
-                    <button className="btn btn-danger btn-xs" onClick={() => deleteQ(q.id)}>حذف</button>
+                  <div className="fl g2">
+                    <button className="btn btn-ghost btn-xs" onClick={()=>togReq(q.id)}>{q.required?"اختياري/Optional":"مطلوب/Required"}</button>
+                    <button className="btn btn-danger btn-xs" onClick={()=>delQ(q.id)}>حذف/Del</button>
                   </div>
                 </div>
               ))}
@@ -554,47 +579,46 @@ function AdminPage({ questions, responses, surveyActive, onToggleActive, onSaveQ
         </div>
       )}
 
-      {tab === "responses" && (
+      {tab==="responses" && (
         <div>
-          <div className="flex justify-between mb-3 items-center">
-            <span className="text-sm text-muted">{responses.length} إجابة مستلمة</span>
-            {responses.length > 0 && (
-              <button className="btn btn-danger btn-sm" onClick={() => setConfirmClear(true)}>مسح جميع الإجابات</button>
-            )}
+          <div className="fl jb aic mb3">
+            <span className="ts tmuted">{responses.length} إجابة مستلمة / responses received</span>
+            {responses.length>0&&<button className="btn btn-danger btn-sm" onClick={()=>setConfirmClear(true)}>مسح الكل / Clear All</button>}
           </div>
           {confirmClear && (
-            <div className="alert alert-warning mb-3">
-              هل أنت متأكد من مسح جميع الإجابات؟ لا يمكن التراجع عن هذا الإجراء.
-              <div className="flex gap-2 mt-2">
-                <button className="btn btn-danger btn-xs" onClick={() => { onClearResponses(); setConfirmClear(false); }}>نعم، امسح الكل</button>
-                <button className="btn btn-ghost btn-xs" onClick={() => setConfirmClear(false)}>إلغاء</button>
+            <div className="alert alert-warn mb3">
+              هل أنت متأكد؟ لا يمكن التراجع. <span className="en">Are you sure? This cannot be undone.</span>
+              <div className="fl g2 mt2">
+                <button className="btn btn-danger btn-xs" onClick={()=>{onClearResponses();setConfirmClear(false);}}>نعم / Yes</button>
+                <button className="btn btn-ghost btn-xs" onClick={()=>setConfirmClear(false)}>إلغاء / Cancel</button>
               </div>
             </div>
           )}
-          {responses.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "48px 0", color: "#6B7A8D" }}>لا توجد إجابات حتى الآن</div>
+          {responses.length===0 ? (
+            <div style={{textAlign:"center",padding:"44px 0",color:"#6B7A8D"}}>
+              <div>لا توجد إجابات حتى الآن</div>
+              <div style={{fontSize:12,marginTop:4}}>No responses yet</div>
+            </div>
           ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>تاريخ الإرسال</th>
-                    <th>القسم</th>
-                    <th>الخبرة</th>
-                    <th>الرضا العام</th>
-                    <th>احتمالية التوصية</th>
-                  </tr>
-                </thead>
+            <div className="tbl-wrap">
+              <table className="dtbl">
+                <thead><tr>
+                  <th>#</th>
+                  <th>التاريخ<span className="en">Date</span></th>
+                  <th>القسم<span className="en">Dept</span></th>
+                  <th>الخبرة<span className="en">Experience</span></th>
+                  <th>الرضا<span className="en">Satisfaction</span></th>
+                  <th>التوصية<span className="en">Recommend</span></th>
+                </tr></thead>
                 <tbody>
-                  {responses.map((r, i) => (
+                  {responses.map((r,i)=>(
                     <tr key={r.id}>
-                      <td>{i + 1}</td>
-                      <td>{new Date(r.submittedAt).toLocaleDateString("ar-OM")}</td>
-                      <td>{r.q_dept || "—"}</td>
-                      <td>{r.q_exp || "—"}</td>
-                      <td>{r.q34 ? `${r.q34}/5` : "—"}</td>
-                      <td>{r.q35 || "—"}</td>
+                      <td>{i+1}</td>
+                      <td>{new Date(r.submittedAt).toLocaleDateString("en-GB")}</td>
+                      <td>{r.q_dept?ar(r.q_dept):"—"}</td>
+                      <td>{r.q_exp?ar(r.q_exp):"—"}</td>
+                      <td>{r.q34?`${r.q34}/5`:"—"}</td>
+                      <td>{r.q35?ar(r.q35):"—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -607,216 +631,163 @@ function AdminPage({ questions, responses, surveyActive, onToggleActive, onSaveQ
   );
 }
 
-// ─── Analytics Page ────────────────────────────────────────────────
-function AnalyticsPage({ questions, responses, analysisCache, setAnalysisCache }) {
+// ── Analytics Page ────────────────────────────────────────────────────
+function AnalyticsPage({questions, responses, analysisCache, setAnalysisCache}) {
   const [tab, setTab] = useState("overview");
   const [aiLoading, setAiLoading] = useState(false);
-  const [openAnalysis, setOpenAnalysis] = useState(null);
+  const [openAI, setOpenAI] = useState(null);
 
-  if (responses.length === 0) return (
-    <div className="page">
-      <div className="success-screen">
-        <div className="success-icon">📊</div>
-        <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>لا توجد بيانات للتحليل</h2>
-        <p style={{ color: "#6B7A8D" }}>انتظر حتى يملأ الموظفون الاستبيان.</p>
-      </div>
-    </div>
+  if (!responses.length) return (
+    <div className="page"><div className="ok-screen">
+      <div className="ok-icon">📊</div>
+      <h2 style={{fontSize:19,fontWeight:800,color:"#1B3F6E",marginBottom:6}}>لا توجد بيانات للتحليل<span className="en">No data to analyse yet</span></h2>
+      <p style={{color:"#6B7A8D",fontSize:13}}>انتظر حتى يملأ الموظفون الاستبيان.</p>
+      <p style={{color:"#8A97A8",fontSize:12,marginTop:4}}>Wait for employees to fill out the survey.</p>
+    </div></div>
   );
 
-  const ratingQs = questions.filter(q => q.type === "rating5");
-  const choiceQs = questions.filter(q => q.type === "radio" || q.type === "yesno");
-  const openQs = questions.filter(q => q.type === "open");
-
-  const avgRating = (qId) => {
-    const vals = responses.map(r => r[qId]).filter(v => v !== undefined);
-    if (!vals.length) return 0;
-    return vals.reduce((a, b) => a + b, 0) / vals.length;
-  };
-
-  const overallSatisfaction = avgRating("q34");
-  const overallScore = Math.round(overallSatisfaction * 20);
-  const scoreColor = overallScore >= 70 ? BRAND.teal : overallScore >= 50 ? BRAND.warning : BRAND.danger;
-
-  const npsResponses = responses.map(r => r.q35).filter(Boolean);
-  const promoters = npsResponses.filter(v => v.includes("٩-١٠")).length;
-  const detractors = npsResponses.filter(v => v.includes("١-٢") || v.includes("٣-٤")).length;
-  const nps = npsResponses.length > 0 ? Math.round(((promoters - detractors) / npsResponses.length) * 100) : 0;
-
-  const sectionScores = [...new Set(ratingQs.map(q => q.section))].map(section => {
-    const sQs = ratingQs.filter(q => q.section === section);
-    const avg = sQs.reduce((sum, q) => sum + avgRating(q.id), 0) / sQs.length;
-    return { section, avg };
+  const ratingQs = questions.filter(q=>q.type==="rating5");
+  const choiceQs = questions.filter(q=>q.type==="radio"||q.type==="yesno");
+  const openQs = questions.filter(q=>q.type==="open");
+  const avg = qId => {const v=responses.map(r=>r[qId]).filter(v=>v!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0;};
+  const overallSat = avg("q34");
+  const overallScore = Math.round(overallSat*20);
+  const scoreColor = overallScore>=70?"#2DADA0":overallScore>=50?"#F39C12":"#E74C3C";
+  const npsR = responses.map(r=>r.q35).filter(Boolean);
+  const promo = npsR.filter(v=>v.includes("٩-١٠")||v.includes("9-10")||v.includes("9–10")).length;
+  const detrac = npsR.filter(v=>v.includes("١-٢")||v.includes("٣-٤")).length;
+  const nps = npsR.length>0?Math.round(((promo-detrac)/npsR.length)*100):0;
+  const secScores = [...new Set(ratingQs.map(q=>q.section))].map(sec=>{
+    const sqs=ratingQs.filter(q=>q.section===sec);
+    return {sec,a:sqs.reduce((s,q)=>s+avg(q.id),0)/sqs.length};
   });
 
-  const analyzeOpenQ = async (qId, qText, answers) => {
-    if (analysisCache[qId]) { setOpenAnalysis({ qId, qText, result: analysisCache[qId] }); return; }
-    setAiLoading(true);
-    setOpenAnalysis({ qId, qText, result: null });
-    try {
-      const sampleAnswers = answers.slice(0, 20).filter(Boolean);
-      if (sampleAnswers.length === 0) { setOpenAnalysis({ qId, qText, result: "لا توجد إجابات لهذا السؤال." }); setAiLoading(false); return; }
-      const prompt = `أنت محلل موارد بشرية خبير. قم بتحليل إجابات الموظفين التالية على سؤال الاستبيان وتلخيصها باللغة العربية في نقاط محددة. حدد الموضوعات المتكررة والمخاوف الرئيسية والمقترحات الإيجابية.
-
-السؤال: ${qText}
-
-الإجابات:
-${sampleAnswers.map((a, i) => `${i+1}. ${a}`).join("\n")}
-
-قدم التحليل في شكل:
-**الموضوعات الرئيسية:** (نقاط)
-**المخاوف المتكررة:** (نقاط)
-**المقترحات الإيجابية:** (نقاط)
-**ملخص عام:** (جملتان)`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
-      });
-      const data = await res.json();
-      const text = data.content?.find(b => b.type === "text")?.text || "تعذر التحليل.";
-      setAnalysisCache(c => ({ ...c, [qId]: text }));
-      setOpenAnalysis({ qId, qText, result: text });
-    } catch (e) {
-      setOpenAnalysis({ qId, qText, result: "حدث خطأ أثناء التحليل. حاول مرة أخرى." });
-    }
+  const analyzeQ = async (qId,qText,answers) => {
+    if(analysisCache[qId]){setOpenAI({qId,qText,result:analysisCache[qId]});return;}
+    setAiLoading(true);setOpenAI({qId,qText,result:null});
+    const sample=answers.slice(0,20).filter(Boolean);
+    if(!sample.length){setOpenAI({qId,qText,result:"لا توجد إجابات / No answers yet."});setAiLoading(false);return;}
+    try{
+      const prompt=`You are an expert HR analyst. Analyse the following employee survey responses in BOTH Arabic and English (Arabic first, then English translation below each point).\n\nQuestion (AR): ${ar(qText)}\nQuestion (EN): ${en(qText)||ar(qText)}\n\nAnswers:\n${sample.map((a,i)=>`${i+1}. ${a}`).join("\n")}\n\nProvide analysis with these sections, each in Arabic followed by English:\n**الموضوعات الرئيسية / Key Themes:**\n**المخاوف المتكررة / Recurring Concerns:**\n**المقترحات / Suggestions:**\n**ملخص / Summary:** (2 sentences)`;
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1200,messages:[{role:"user",content:prompt}]})});
+      const data=await res.json();
+      const text=data.content?.find(b=>b.type==="text")?.text||"تعذر التحليل. / Analysis failed.";
+      setAnalysisCache(c=>({...c,[qId]:text}));setOpenAI({qId,qText,result:text});
+    }catch{setOpenAI({qId,qText,result:"حدث خطأ. / An error occurred."});}
     setAiLoading(false);
   };
 
   return (
     <div className="page">
-      <h2 className="section-header">التحليلات والنتائج</h2>
-      <p className="section-sub">بناءً على {responses.length} إجابة مستلمة</p>
-
-      <div className="tab-group">
-        {[["overview","نظرة عامة"],["questions","تحليل الأسئلة"],["open","الأسئلة المفتوحة"]].map(([id, label]) => (
-          <div key={id} className={`tab-item ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>{label}</div>
+      <h2 className="sec-hdr">التحليلات والنتائج<span className="en">Analytics & Results</span></h2>
+      <p className="sec-sub">بناءً على {responses.length} إجابة مستلمة<span className="en">Based on {responses.length} received responses</span></p>
+      <div className="tabs">
+        {[["overview","نظرة عامة","Overview"],["questions","تحليل الأسئلة","Questions"],["open","الأسئلة المفتوحة","Open-Ended"]].map(([id,a,e])=>(
+          <div key={id} className={`tab${tab===id?" active":""}`} onClick={()=>setTab(id)}>{a}<span className="en">{e}</span></div>
         ))}
       </div>
 
-      {tab === "overview" && (
+      {tab==="overview" && (
         <div>
           <div className="metric-grid">
-            <div className="metric">
-              <div className="metric-label">إجمالي المشاركين</div>
-              <div className="metric-value">{responses.length}</div>
-            </div>
-            <div className="metric">
-              <div className="metric-label">الرضا العام</div>
-              <div className="metric-value" style={{ color: scoreColor }}>{overallScore}%</div>
-              <div className="metric-sub">{overallSatisfaction.toFixed(1)} / 5</div>
-            </div>
-            <div className="metric">
-              <div className="metric-label">مؤشر الترشيح NPS</div>
-              <div className="metric-value" style={{ color: nps >= 30 ? BRAND.teal : nps >= 0 ? BRAND.warning : BRAND.danger }}>{nps}</div>
-            </div>
-            <div className="metric">
-              <div className="metric-label">أعلى نقطة رضا</div>
-              <div className="metric-value" style={{ fontSize: 14 }}>
-                {sectionScores.length > 0 ? sectionScores.reduce((a, b) => a.avg > b.avg ? a : b).section.substring(0, 12) + "..." : "—"}
-              </div>
-            </div>
+            <div className="metric"><div className="metric-lbl">إجمالي المشاركين<span className="en">Total Participants</span></div><div className="metric-val">{responses.length}</div></div>
+            <div className="metric"><div className="metric-lbl">الرضا العام<span className="en">Overall Satisfaction</span></div><div className="metric-val" style={{color:scoreColor}}>{overallScore}%</div><div className="metric-sub">{overallSat.toFixed(1)} / 5</div></div>
+            <div className="metric"><div className="metric-lbl">مؤشر NPS<span className="en">NPS Index</span></div><div className="metric-val" style={{color:nps>=30?"#2DADA0":nps>=0?"#F39C12":"#E74C3C"}}>{nps}</div></div>
+            <div className="metric"><div className="metric-lbl">أعلى محور رضا<span className="en">Top Satisfaction Area</span></div><div className="metric-val" style={{fontSize:12}}>{secScores.length>0?ar(secScores.reduce((a,b)=>a.a>b.a?a:b).sec).substring(0,14)+"...":"—"}</div></div>
           </div>
-
           <div className="card">
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1B3F6E", marginBottom: 16 }}>الرضا حسب المحور</h3>
-            {sectionScores.map(({ section, avg }) => {
-              const pct = Math.round(avg * 20);
-              const color = pct >= 70 ? "#2DADA0" : pct >= 50 ? "#F39C12" : "#E74C3C";
+            <h3 style={{fontSize:14,fontWeight:700,color:"#1B3F6E",marginBottom:14}}>
+              الرضا حسب المحور <span style={{fontSize:11,fontWeight:400,color:"#6B7A8D"}}>/ Satisfaction by Section</span>
+            </h3>
+            {secScores.map(({sec,a})=>{
+              const pct=Math.round(a*20);
+              const col=pct>=70?"#2DADA0":pct>=50?"#F39C12":"#E74C3C";
               return (
-                <div key={section} className="mb-3">
-                  <div className="flex justify-between mb-1">
-                    <span style={{ fontSize: 13, color: "#1A2332" }}>{section}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color }}>{pct}%</span>
+                <div key={sec} className="mb3">
+                  <div className="fl jb mb2">
+                    <span style={{fontSize:12}}>{ar(sec)} <span style={{fontSize:10,color:"#6B7A8D"}}>/ {en(sec)}</span></span>
+                    <span style={{fontSize:13,fontWeight:700,color:col}}>{pct}%</span>
                   </div>
-                  <div className="progress-bar-bg">
-                    <div className="progress-bar-fill" style={{ width: `${pct}%`, background: color }}></div>
-                  </div>
+                  <div className="prog-bg"><div className="prog-fill" style={{width:`${pct}%`,background:col}}/></div>
                 </div>
               );
             })}
           </div>
-
-          <div className="grid-2">
+          <div className="grid2">
             <div className="card">
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1B3F6E", marginBottom: 14 }}>توزيع الأقسام</h3>
-              <BarChart data={["العمليات","التقنية","المالية","الموارد البشرية","أخرى"].map(opt => ({
-                label: opt, count: responses.filter(r => r.q_dept === opt).length
-              })).filter(d => d.count > 0)} total={responses.length} color="#2E73B8" />
+              <h3 style={{fontSize:13,fontWeight:700,color:"#1B3F6E",marginBottom:12}}>توزيع الأقسام <span style={{fontSize:10,fontWeight:400,color:"#6B7A8D"}}>/  Departments</span></h3>
+              <BarChart data={["العمليات|Operations","التقنية|Technology","المالية|Finance","الموارد البشرية|Human Resources","أخرى|Other"].map(opt=>({label:opt,count:responses.filter(r=>r.q_dept===opt).length})).filter(d=>d.count>0)} total={responses.length} color="#2E73B8"/>
             </div>
             <div className="card">
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1B3F6E", marginBottom: 14 }}>توزيع سنوات الخبرة</h3>
-              <BarChart data={["أقل من سنة","١-٣ سنوات","٤-٦ سنوات","٧-١٠ سنوات","أكثر من ١٠ سنوات"].map(opt => ({
-                label: opt, count: responses.filter(r => r.q_exp === opt).length
-              })).filter(d => d.count > 0)} total={responses.length} color="#2DADA0" />
+              <h3 style={{fontSize:13,fontWeight:700,color:"#1B3F6E",marginBottom:12}}>سنوات الخبرة <span style={{fontSize:10,fontWeight:400,color:"#6B7A8D"}}>/  Experience</span></h3>
+              <BarChart data={["أقل من سنة|<1 yr","١-٣ سنوات|1–3 yrs","٤-٦ سنوات|4–6 yrs","٧-١٠ سنوات|7–10 yrs","أكثر من ١٠ سنوات|10+ yrs"].map(opt=>({label:opt,count:responses.filter(r=>r.q_exp===opt).length})).filter(d=>d.count>0)} total={responses.length} color="#2DADA0"/>
             </div>
           </div>
         </div>
       )}
 
-      {tab === "questions" && (
+      {tab==="questions" && (
         <div>
-          {ratingQs.map(q => {
-            const avg = avgRating(q.id);
-            const dist = [1,2,3,4,5].map(v => responses.filter(r => r[q.id] === v).length);
+          {ratingQs.map(q=>{
+            const a=avg(q.id);
+            const dist=[1,2,3,4,5].map(v=>responses.filter(r=>r[q.id]===v).length);
             return (
-              <div key={q.id} className="card mb-3">
-                <div style={{ fontSize: 13, color: "#6B7A8D", marginBottom: 4 }}>📌 {q.section}</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A2332", marginBottom: 12 }}>{q.text}</div>
-                <div className="flex items-center gap-3 mb-3">
-                  <div style={{ fontSize: 32, fontWeight: 800, color: avg >= 4 ? "#2DADA0" : avg >= 3 ? "#F39C12" : "#E74C3C" }}>{avg.toFixed(1)}</div>
-                  <div>
-                    <div style={{ fontSize: 12, color: "#6B7A8D" }}>المتوسط / 5</div>
-                    <div style={{ fontSize: 12, color: "#6B7A8D" }}>{responses.filter(r => r[q.id]).length} إجابة</div>
-                  </div>
+              <div key={q.id} className="card mb3">
+                <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>📌 {ar(q.section)} / {en(q.section)}</div>
+                <div style={{fontSize:13,fontWeight:600,marginBottom:10,lineHeight:1.5}}>
+                  {ar(q.text)}
+                  {en(q.text)&&<span style={{fontSize:11,color:"#6B7A8D",display:"block",direction:"ltr",textAlign:"right",fontWeight:400,marginTop:2}}>{en(q.text)}</span>}
                 </div>
-                <BarChart data={(q.labels || ["١","٢","٣","٤","٥"]).map((lbl, i) => ({ label: lbl, count: dist[i] }))} total={responses.length} color="#2E73B8" />
+                <div className="fl aic g3 mb3">
+                  <div style={{fontSize:28,fontWeight:800,color:a>=4?"#2DADA0":a>=3?"#F39C12":"#E74C3C"}}>{a.toFixed(1)}</div>
+                  <div><div style={{fontSize:11,color:"#6B7A8D"}}>avg / 5</div><div style={{fontSize:11,color:"#6B7A8D"}}>{responses.filter(r=>r[q.id]).length} responses</div></div>
+                </div>
+                <BarChart data={(q.labels||[]).map((lbl,i)=>({label:lbl,count:dist[i]}))} total={responses.length} color="#2E73B8"/>
               </div>
             );
           })}
-          {choiceQs.map(q => {
-            const opts = q.options || q.labels || [];
-            return (
-              <div key={q.id} className="card mb-3">
-                <div style={{ fontSize: 13, color: "#6B7A8D", marginBottom: 4 }}>📌 {q.section}</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A2332", marginBottom: 12 }}>{q.text}</div>
-                <BarChart data={opts.map(opt => ({ label: opt, count: responses.filter(r => r[q.id] === opt).length }))} total={responses.length} color="#4A9B3C" />
+          {choiceQs.map(q=>(
+            <div key={q.id} className="card mb3">
+              <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>📌 {ar(q.section)} / {en(q.section)}</div>
+              <div style={{fontSize:13,fontWeight:600,marginBottom:10,lineHeight:1.5}}>
+                {ar(q.text)}
+                {en(q.text)&&<span style={{fontSize:11,color:"#6B7A8D",display:"block",direction:"ltr",textAlign:"right",fontWeight:400,marginTop:2}}>{en(q.text)}</span>}
               </div>
-            );
-          })}
+              <BarChart data={(q.options||[]).map(opt=>({label:opt,count:responses.filter(r=>r[q.id]===opt).length}))} total={responses.length} color="#4A9B3C"/>
+            </div>
+          ))}
         </div>
       )}
 
-      {tab === "open" && (
+      {tab==="open" && (
         <div>
-          {openAnalysis && (
-            <div className="ai-bubble mb-4">
-              <div className="ai-bubble-header">✨ تحليل الذكاء الاصطناعي — {openAnalysis.qText?.substring(0, 40)}...</div>
-              {aiLoading && !openAnalysis.result ? (
-                <div className="flex items-center gap-2"><div className="spinner"></div><span className="text-sm text-muted">جاري التحليل...</span></div>
-              ) : (
-                <div className="ai-bubble-text" style={{ whiteSpace: "pre-wrap" }}>{openAnalysis.result}</div>
-              )}
+          {openAI && (
+            <div className="ai-box mb4">
+              <div className="ai-hdr">✨ تحليل الذكاء الاصطناعي<span className="en">AI Analysis — {en(openAI.qText)||ar(openAI.qText).substring(0,40)}</span></div>
+              {aiLoading&&!openAI.result
+                ?<div className="fl aic g2"><span className="spinner"/><span className="ts tmuted">جاري التحليل... / Analysing...</span></div>
+                :<div className="ai-txt" style={{whiteSpace:"pre-wrap"}}>{openAI.result}</div>}
             </div>
           )}
-          {openQs.map(q => {
-            const answers = responses.map(r => r[q.id]).filter(Boolean);
+          {openQs.map(q=>{
+            const answers=responses.map(r=>r[q.id]).filter(Boolean);
             return (
-              <div key={q.id} className="card mb-3">
-                <div style={{ fontSize: 13, color: "#6B7A8D", marginBottom: 4 }}>📌 {q.section}</div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A2332", marginBottom: 12 }}>{q.text}</div>
-                <div className="flex justify-between items-center mb-3">
-                  <span className="badge badge-blue">{answers.length} إجابة</span>
-                  <button className="btn btn-teal btn-sm" onClick={() => analyzeOpenQ(q.id, q.text, answers)} disabled={answers.length === 0 || aiLoading}>
-                    {aiLoading && openAnalysis?.qId === q.id ? <span className="spinner"></span> : "✨ تحليل بالذكاء الاصطناعي"}
+              <div key={q.id} className="card mb3">
+                <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>📌 {ar(q.section)} / {en(q.section)}</div>
+                <div style={{fontSize:13,fontWeight:600,marginBottom:10,lineHeight:1.5}}>
+                  {ar(q.text)}
+                  {en(q.text)&&<span style={{fontSize:11,color:"#6B7A8D",display:"block",direction:"ltr",textAlign:"right",fontWeight:400,marginTop:2}}>{en(q.text)}</span>}
+                </div>
+                <div className="fl jb aic mb3">
+                  <span className="badge badge-blue">{answers.length} إجابة / responses</span>
+                  <button className="btn btn-teal btn-sm" onClick={()=>analyzeQ(q.id,q.text,answers)} disabled={!answers.length||aiLoading}>
+                    {aiLoading&&openAI?.qId===q.id?<span className="spinner"/>:"✨ تحليل / Analyse"}
                   </button>
                 </div>
-                {answers.slice(0, 5).map((ans, i) => (
-                  <div key={i} style={{ padding: "10px 14px", background: "#F5F7FA", borderRadius: 8, marginBottom: 8, fontSize: 13, color: "#1A2332", lineHeight: 1.6 }}>
-                    "{ans}"
-                  </div>
+                {answers.slice(0,5).map((ans,i)=>(
+                  <div key={i} style={{padding:"9px 12px",background:"#F5F7FA",borderRadius:8,marginBottom:7,fontSize:12,lineHeight:1.6}}>"{ans}"</div>
                 ))}
-                {answers.length > 5 && <p className="text-xs text-muted" style={{ marginTop: 4 }}>+ {answers.length - 5} إجابة أخرى</p>}
+                {answers.length>5&&<p className="tx tmuted" style={{marginTop:3}}>+ {answers.length-5} إجابة أخرى / more responses</p>}
               </div>
             );
           })}
@@ -826,198 +797,177 @@ ${sampleAnswers.map((a, i) => `${i+1}. ${a}`).join("\n")}
   );
 }
 
-function BarChart({ data, total, color }) {
-  const max = Math.max(...data.map(d => d.count), 1);
-  return (
-    <div>
-      {data.map(({ label, count }, i) => (
-        <div key={i} className="chart-bar-h">
-          <div className="chart-bar-label">{label}</div>
-          <div className="chart-bar-track">
-            <div className="chart-bar-track-fill" style={{ width: `${Math.round((count / max) * 100)}%`, background: color }}>
-              {count > 0 && <span style={{ fontSize: 11, color: "white", fontWeight: 700 }}>{count}</span>}
-            </div>
-          </div>
-          <div className="chart-bar-count">{total > 0 ? Math.round((count / total) * 100) : 0}%</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Report Page ───────────────────────────────────────────────────
-function ReportPage({ questions, responses, analysisCache, setAnalysisCache }) {
+// ── Report Page ───────────────────────────────────────────────────────
+function ReportPage({questions, responses}) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const avgRating = (qId) => {
-    const vals = responses.map(r => r[qId]).filter(v => v !== undefined);
-    if (!vals.length) return 0;
-    return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
-  };
+  const avgR = qId => {const v=responses.map(r=>r[qId]).filter(v=>v!=null);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(2):"0";};
+  const overallAvg = responses.length>0?responses.reduce((s,r)=>s+(r.q34||0),0)/(responses.filter(r=>r.q34).length||1):0;
 
-  const generateReport = async () => {
-    if (responses.length === 0) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const ratingQs = questions.filter(q => q.type === "rating5");
-      const openQs = questions.filter(q => q.type === "open");
-      const openAnswers = openQs.map(q => ({
-        question: q.text,
-        answers: responses.map(r => r[q.id]).filter(Boolean).slice(0, 10)
-      }));
-
-      const statsData = ratingQs.map(q => ({
-        question: q.text,
-        section: q.section,
-        avg: avgRating(q.id),
-        responses: responses.filter(r => r[q.id]).length
-      }));
-
-      const prompt = `أنت خبير موارد بشرية واستشاري تنظيمي. قم بإعداد تقرير تنفيذي شامل باللغة العربية بناءً على نتائج استبيان رضا موظفي شركة أساس.
-
-**إحصاءات الاستبيان:**
-- عدد المشاركين: ${responses.length}
-- تاريخ التقرير: ${new Date().toLocaleDateString("ar-OM")}
-
-**متوسطات التقييم (من 5):**
-${statsData.map(s => `- ${s.section} | ${s.question.substring(0,50)}: ${s.avg}/5`).join("\n")}
-
-**عينة من الإجابات المفتوحة:**
-${openAnswers.filter(o => o.answers.length > 0).slice(0, 5).map(o => `السؤال: ${o.question}\nالإجابات:\n${o.answers.slice(0,3).map((a,i) => `  ${i+1}. ${a}`).join("\n")}`).join("\n\n")}
-
-قم بكتابة تقرير تنفيذي احترافي يتضمن الأقسام التالية (استخدم نفس العناوين بالضبط):
-
-## ملخص تنفيذي
-## أبرز النتائج
-## مخاوف الموظفين
-## توقعات الموظفين
-## نقاط القوة
-## مجالات التحسين
-## التوصيات والإجراءات المقترحة
-## خطة تحسين التواصل المؤسسي
-
-اجعل التقرير دقيقاً ومحدداً ومبنياً على البيانات المتاحة. استخدم لغة مهنية واضحة.`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, messages: [{ role: "user", content: prompt }] })
-      });
-      const data = await res.json();
-      const text = data.content?.find(b => b.type === "text")?.text || "تعذر إنشاء التقرير.";
-      setReport(text);
-    } catch (e) {
-      setError("حدث خطأ أثناء إنشاء التقرير. تأكد من الاتصال بالإنترنت وحاول مرة أخرى.");
-    }
+  const generate = async () => {
+    if(!responses.length)return;
+    setLoading(true);setError(null);
+    try{
+      const rqs=questions.filter(q=>q.type==="rating5");
+      const oqs=questions.filter(q=>q.type==="open");
+      const stats=rqs.map(q=>({ar_q:ar(q.text),en_q:en(q.text)||ar(q.text),sec:ar(q.section),avg:avgR(q.id)}));
+      const openA=oqs.map(q=>({ar_q:ar(q.text),en_q:en(q.text)||ar(q.text),answers:responses.map(r=>r[q.id]).filter(Boolean).slice(0,8)}));
+      const prompt=`You are a senior HR consultant. Write a comprehensive bilingual executive report (Arabic and English) based on ASAAS employee satisfaction survey results. Each section heading and paragraph must appear FIRST in Arabic, then immediately followed by the English translation on the next line.\n\nParticipants: ${responses.length}\nDate: ${new Date().toLocaleDateString("en-GB")}\n\nRating averages (out of 5):\n${stats.map(s=>`- [${s.sec}] AR: ${s.ar_q} | EN: ${s.en_q} → ${s.avg}/5`).join("\n")}\n\nSample open-ended answers:\n${openA.filter(o=>o.answers.length).slice(0,4).map(o=>`Q(AR): ${o.ar_q}\nQ(EN): ${o.en_q}\n${o.answers.slice(0,3).map((a,i)=>`${i+1}. ${a}`).join("\n")}`).join("\n\n")}\n\nWrite the report with EXACTLY these section headings (Arabic | English):\n## ملخص تنفيذي | Executive Summary\n## أبرز النتائج | Key Findings\n## مخاوف الموظفين | Employee Concerns\n## توقعات الموظفين | Employee Expectations\n## نقاط القوة | Strengths\n## مجالات التحسين | Areas for Improvement\n## التوصيات والإجراءات المقترحة | Recommendations & Proposed Actions\n## خطة تحسين التواصل المؤسسي | Institutional Communication Improvement Plan\n\nFor each section: write the Arabic paragraph first, then the English paragraph directly below it. Be specific and data-driven.`;
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:5000,messages:[{role:"user",content:prompt}]})});
+      const data=await res.json();
+      setReport(data.content?.find(b=>b.type==="text")?.text||"تعذر إنشاء التقرير. / Report generation failed.");
+    }catch{setError("حدث خطأ. تأكد من الاتصال. / An error occurred. Check your connection.");}
     setLoading(false);
   };
 
-  const ratingQs = questions.filter(q => q.type === "rating5");
-  const overallAvg = responses.length > 0 ? (responses.reduce((sum, r) => sum + (r.q34 || 0), 0) / responses.filter(r => r.q34).length || 0) : 0;
+  const ICONS={"ملخص تنفيذي":"📋","Executive Summary":"📋","أبرز النتائج":"🔍","مخاوف الموظفين":"⚠️","توقعات الموظفين":"💡","نقاط القوة":"✅","مجالات التحسين":"📈","التوصيات والإجراءات المقترحة":"🎯","خطة تحسين التواصل المؤسسي":"📣"};
+
+  if(!responses.length) return (
+    <div className="page"><div className="ok-screen">
+      <div className="ok-icon">📄</div>
+      <h2 style={{fontSize:19,fontWeight:800,color:"#1B3F6E",marginBottom:6}}>لا توجد بيانات كافية<span className="en">Insufficient data</span></h2>
+      <p style={{color:"#6B7A8D",fontSize:13}}>يحتاج التقرير إلى إجابات لتحليلها. / The report needs responses to analyse.</p>
+    </div></div>
+  );
 
   return (
     <div className="page">
-      <h2 className="section-header">التقرير الشامل</h2>
-      <p className="section-sub">تقرير تنفيذي مُولَّد بالذكاء الاصطناعي بناءً على نتائج الاستبيان</p>
-
-      {responses.length === 0 ? (
-        <div className="success-screen">
-          <div className="success-icon">📄</div>
-          <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>لا توجد بيانات كافية</h2>
-          <p style={{ color: "#6B7A8D" }}>يحتاج التقرير إلى إجابات لتحليلها.</p>
-        </div>
-      ) : (
-        <>
-          <div className="card" style={{ background: "linear-gradient(135deg, #1B3F6E, #2E73B8)", color: "white" }}>
-            <div className="flex justify-between items-center" style={{ flexWrap: "wrap", gap: 16 }}>
-              <div>
-                <h3 style={{ fontSize: 20, fontWeight: 800, color: "white", marginBottom: 4 }}>تقرير رضا الموظفين — شركة أساس</h3>
-                <p style={{ fontSize: 13, opacity: 0.8 }}>{new Date().toLocaleDateString("ar-OM", { year: "numeric", month: "long", day: "numeric" })} • {responses.length} مشارك</p>
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 40, fontWeight: 800, color: "#2DADA0" }}>{Math.round(overallAvg * 20)}%</div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>الرضا العام</div>
-              </div>
-            </div>
+      <h2 className="sec-hdr">التقرير الشامل<span className="en">Comprehensive Report</span></h2>
+      <p className="sec-sub">تقرير تنفيذي مُولَّد بالذكاء الاصطناعي<span className="en">AI-generated executive report</span></p>
+      <div className="card" style={{background:"linear-gradient(135deg,#1B3F6E,#2E73B8)",color:"white",marginBottom:22}}>
+        <div className="fl jb aic" style={{flexWrap:"wrap",gap:14}}>
+          <div>
+            <h3 style={{fontSize:18,fontWeight:800,color:"white",marginBottom:3}}>تقرير رضا الموظفين — شركة أساس</h3>
+            <div style={{fontSize:12,color:"rgba(255,255,255,.8)",marginBottom:2}}>Employee Satisfaction Report — ASAAS Company</div>
+            <p style={{fontSize:12,opacity:.75}}>{new Date().toLocaleDateString("en-GB",{year:"numeric",month:"long",day:"numeric"})} • {responses.length} مشارك / participants</p>
           </div>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:38,fontWeight:800,color:"#2DADA0"}}>{Math.round(overallAvg*20)}%</div>
+            <div style={{fontSize:11,opacity:.8}}>الرضا العام / Overall Satisfaction</div>
+          </div>
+        </div>
+      </div>
 
-          {!report && (
-            <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <p style={{ color: "#6B7A8D", marginBottom: 20, fontSize: 15 }}>اضغط لإنشاء التقرير التنفيذي الكامل باستخدام الذكاء الاصطناعي.</p>
-              <button className="btn btn-primary" style={{ padding: "14px 40px", fontSize: 16 }} onClick={generateReport} disabled={loading}>
-                {loading ? <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="spinner"></span>جاري إنشاء التقرير...</span> : "✨ إنشاء التقرير الشامل"}
-              </button>
-              {error && <p style={{ color: "#E74C3C", marginTop: 12, fontSize: 14 }}>{error}</p>}
-            </div>
-          )}
+      {!report && (
+        <div style={{textAlign:"center",padding:"36px 0"}}>
+          <p style={{color:"#6B7A8D",marginBottom:6,fontSize:14}}>اضغط لإنشاء التقرير التنفيذي الكامل باستخدام الذكاء الاصطناعي.</p>
+          <p style={{color:"#8A97A8",fontSize:12,marginBottom:20}}>Click to generate the full executive report using AI.</p>
+          <button className="btn btn-primary" style={{padding:"13px 38px",fontSize:15}} onClick={generate} disabled={loading}>
+            {loading?<span style={{display:"inline-flex",alignItems:"center",gap:8}}><span className="spinner"/>جاري الإنشاء... / Generating...</span>:"✨ إنشاء التقرير / Generate Report"}
+          </button>
+          {error&&<p style={{color:"#E74C3C",marginTop:12,fontSize:13}}>{error}</p>}
+        </div>
+      )}
 
-          {report && <ReportDisplay report={report} responses={responses} questions={questions} avgRating={avgRating} onRegenerate={generateReport} loading={loading} />}
-        </>
+      {report && (
+        <div>
+          <div className="fl jb aic mb4">
+            <span className="badge badge-teal">✨ مُولَّد بالذكاء الاصطناعي / AI-generated</span>
+            <button className="btn btn-ghost btn-sm" onClick={generate} disabled={loading}>{loading?"جاري...":" إعادة إنشاء / Regenerate"}</button>
+          </div>
+          {report.split(/## /).filter(Boolean).map((s,i)=>{
+            const lines=s.trim().split("\n");
+            const rawTitle=lines[0].trim();
+            const titleAr=rawTitle.split("|")[0].trim();
+            const titleEn=rawTitle.split("|")[1]?.trim()||rawTitle;
+            const content=lines.slice(1).join("\n").trim();
+            const icon=ICONS[titleAr]||ICONS[titleEn]||"📌";
+            return (
+              <div key={i} className="card" style={{marginBottom:14}}>
+                <h3 style={{fontSize:16,fontWeight:700,color:"#1B3F6E",marginBottom:12,display:"flex",alignItems:"flex-start",gap:8}}>
+                  <span>{icon}</span>
+                  <span>
+                    {titleAr}
+                    <span style={{fontSize:12,fontWeight:400,color:"#6B7A8D",display:"block",direction:"ltr",textAlign:"right",marginTop:2}}>{titleEn}</span>
+                  </span>
+                </h3>
+                <div style={{fontSize:13,color:"#1A2332",lineHeight:1.85}}>
+                  {content.split("\n").map((line,j)=>{
+                    if(!line.trim())return <div key={j} style={{height:5}}/>;
+                    if(line.startsWith("**")&&line.endsWith("**"))return <div key={j} style={{fontWeight:700,color:"#1B3F6E",marginTop:10,marginBottom:4}}>{line.replace(/\*\*/g,"")}</div>;
+                    if(line.startsWith("- ")||line.startsWith("• "))return <div key={j} style={{paddingRight:14,marginBottom:5,display:"flex",gap:7}}><span style={{color:"#2DADA0",flexShrink:0}}>◆</span><span>{line.substring(2)}</span></div>;
+                    if(/^\d+\./.test(line))return <div key={j} style={{paddingRight:6,marginBottom:5}}><strong style={{color:"#1B3F6E"}}>{line.split(".")[0]}.</strong>{line.split(".").slice(1).join(".")}</div>;
+                    return <p key={j} style={{marginBottom:7}}>{line}</p>;
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
-function ReportDisplay({ report, responses, questions, avgRating, onRegenerate, loading }) {
-  const sections = report.split(/## /).filter(Boolean).map(s => {
-    const lines = s.trim().split("\n");
-    return { title: lines[0].trim(), content: lines.slice(1).join("\n").trim() };
-  });
+// ── Root App ──────────────────────────────────────────────────────────
+function App() {
+  const [page, setPage] = useState("survey");
+  const [questions, setQuestions] = useState(()=>storageGet("asaas_q")||INITIAL_QUESTIONS);
+  const [responses, setResponses] = useState(()=>storageGet("asaas_r")||[]);
+  const [surveyActive, setSurveyActive] = useState(()=>{const v=storageGet("asaas_on");return v!==null?v:true;});
+  const [analysisCache, setAnalysisCache] = useState({});
 
-  const icons = { "ملخص تنفيذي": "📋", "أبرز النتائج": "🔍", "مخاوف الموظفين": "⚠️", "توقعات الموظفين": "💡", "نقاط القوة": "✅", "مجالات التحسين": "📈", "التوصيات والإجراءات المقترحة": "🎯", "خطة تحسين التواصل المؤسسي": "📣" };
+  const saveQ = qs=>{setQuestions(qs);storageSet("asaas_q",qs);};
+  const saveR = rs=>{setResponses(rs);storageSet("asaas_r",rs);};
+  const toggleOn = v=>{setSurveyActive(v);storageSet("asaas_on",v);};
+  const handleSubmit = a=>{saveR([...responses,{...a,id:Date.now(),submittedAt:new Date().toISOString()}]);};
+
+  const NAV=[
+    ["survey","الاستبيان","Survey","📋"],
+    ["admin","لوحة التحكم","Admin","⚙️"],
+    ["analytics","التحليلات","Analytics","📊"],
+    ["report","التقرير","Report","📄"],
+  ];
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-4">
-        <span className="badge badge-teal">✨ مُولَّد بالذكاء الاصطناعي</span>
-        <button className="btn btn-ghost btn-sm" onClick={onRegenerate} disabled={loading}>{loading ? "جاري التحديث..." : "إعادة إنشاء التقرير"}</button>
-      </div>
-
-      <div className="metric-grid mb-4">
-        {questions.filter(q => q.type === "rating5").slice(0, 4).map(q => {
-          const avg = parseFloat(avgRating(q.id));
-          return (
-            <div key={q.id} className="metric">
-              <div className="metric-label" style={{ fontSize: 11 }}>{q.text.substring(0, 35)}...</div>
-              <div className="metric-value" style={{ fontSize: 24, color: avg >= 4 ? BRAND.teal : avg >= 3 ? BRAND.warning : BRAND.danger }}>{avg.toFixed(1)}/5</div>
+    <>
+      <GlobalStyle/>
+      <div className="app">
+        <nav className="nav">
+          <div className="nav-logo">
+            <div className="nav-logo-box">
+              <svg viewBox="0 0 28 28" width="22" height="22">
+                <rect x="2" y="2" width="11" height="11" rx="2" fill="#2DADA0"/>
+                <rect x="15" y="2" width="11" height="11" rx="2" fill="#4A9B3C"/>
+                <rect x="2" y="15" width="11" height="11" rx="2" fill="#1B3F6E"/>
+                <rect x="15" y="15" width="11" height="11" rx="2" fill="#5BB3E0"/>
+              </svg>
             </div>
-          );
-        })}
-      </div>
-
-      {sections.map(({ title, content }, i) => (
-        <div key={i} className="report-section">
-          <div className="card">
-            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#1B3F6E", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
-              <span>{icons[title] || "📌"}</span> {title}
-            </h3>
-            <div style={{ fontSize: 14, color: "#1A2332", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
-              {content.split("\n").map((line, j) => {
-                if (line.startsWith("**") && line.endsWith("**")) {
-                  return <div key={j} style={{ fontWeight: 700, color: "#1B3F6E", marginTop: 10, marginBottom: 4 }}>{line.replace(/\*\*/g, "")}</div>;
-                }
-                if (line.startsWith("- ") || line.startsWith("• ")) {
-                  return <div key={j} style={{ paddingRight: 16, marginBottom: 6, display: "flex", gap: 8 }}><span style={{ color: "#2DADA0", flexShrink: 0 }}>◆</span><span>{line.substring(2)}</span></div>;
-                }
-                if (line.match(/^\d+\./)) {
-                  return <div key={j} style={{ paddingRight: 8, marginBottom: 6 }}><strong style={{ color: "#1B3F6E" }}>{line.split(".")[0]}.</strong> {line.split(".").slice(1).join(".")}</div>;
-                }
-                return line ? <p key={j} style={{ marginBottom: 8 }}>{line}</p> : <div key={j} style={{ height: 4 }}></div>;
-              })}
-            </div>
+            <span className="nav-title">أساس | ASAAS<span className="en">Employee Survey Platform</span></span>
           </div>
+          <div className="nav-tabs">
+            {NAV.map(([id,ar_,en_,ic])=>(
+              <button key={id} className={`nav-tab${page===id?" active":""}`} onClick={()=>setPage(id)}>
+                {id==="analytics"&&responses.length>0&&<span className="nav-badge">{responses.length}</span>}
+                {ar_}<span className="en">{en_}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        {page==="survey"   && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={handleSubmit}/>}
+        {page==="admin"    && <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleOn} onSaveQuestions={saveQ} onClearResponses={()=>{saveR([]);setAnalysisCache({});}}/>}
+        {page==="analytics"&& <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache}/>}
+        {page==="report"   && <ReportPage questions={questions} responses={responses}/>}
+
+        <div className="fnav fl">
+          {NAV.map(([id,ar_,en_,ic])=>(
+            <div key={id} className={`fni${page===id?" active":""}`} onClick={()=>setPage(id)}>
+              <span className="fni-icon">{ic}</span>
+              <span>{ar_}</span>
+              <span style={{fontSize:8,opacity:.8}}>{en_}</span>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </div>
+    </>
   );
 }
 
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<App />);
-  </script>
+const root=ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App/>);
+</script>
 </body>
 </html>
