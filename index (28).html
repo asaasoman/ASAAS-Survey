@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>استبيان رضا الموظفين — أساس ASAAS</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'><rect x='2' y='2' width='11' height='11' rx='2' fill='%232DADA0'/><rect x='15' y='2' width='11' height='11' rx='2' fill='%234A9B3C'/><rect x='2' y='15' width='11' height='11' rx='2' fill='%231B3F6E'/><rect x='15' y='15' width='11' height='11' rx='2' fill='%235BB3E0'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body { font-family: 'Tajawal', sans-serif; direction: rtl; background: #F5F7FA; color: #1A2332; }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+const BRAND = {
+  navy: "#1B3F6E",
+  blue: "#2E73B8",
+  teal: "#2DADA0",
+  green: "#4A9B3C",
+  lightBlue: "#5BB3E0",
+  bg: "#F5F7FA",
+  card: "#FFFFFF",
+  text: "#1A2332",
+  muted: "#6B7A8D",
+  border: "#E1E8F0",
+  success: "#2ECC71",
+  warning: "#F39C12",
+  danger: "#E74C3C",
+};
+
+const INITIAL_QUESTIONS = [
+  { id: "q_dept", section: "البيانات العامة", type: "radio", required: false, text: "القسم أو الإدارة", options: ["العمليات", "التقنية", "المالية", "الموارد البشرية", "أخرى"] },
+  { id: "q_exp", section: "البيانات العامة", type: "radio", required: false, text: "سنوات الخبرة في الشركة", options: ["أقل من سنة", "١-٣ سنوات", "٤-٦ سنوات", "٧-١٠ سنوات", "أكثر من ١٠ سنوات"] },
+  { id: "q3", section: "المسار الوظيفي والترقيات", type: "rating5", required: true, text: "أنا راضٍ عن مسيرتي الوظيفية الحالية في الشركة.", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
+  { id: "q4", section: "المسار الوظيفي والترقيات", type: "rating5", required: true, text: "أرى مساراً وظيفياً واضحاً أمامي داخل الشركة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q5", section: "المسار الوظيفي والترقيات", type: "rating5", required: true, text: "آلية الترقية في الشركة شفافة وعادلة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q6", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "كم مضى على آخر مراجعة لمسماك الوظيفي؟", options: ["أقل من سنة", "١-٣ سنوات", "٤-٧ سنوات", "أكثر من ٧ سنوات", "لم يُراجَع قط"] },
+  { id: "q7", section: "المسار الوظيفي والترقيات", type: "yesno", required: true, text: "هل تعتقد أن مسماك الوظيفي الحالي يعكس مؤهلاتك وخبراتك الفعلية؟", options: ["نعم", "لا", "لا أعرف"] },
+  { id: "q8", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "ما مدى أهمية مراجعة المسميات الوظيفية دورياً في رأيك؟", options: ["غير مهم", "مهم نوعاً ما", "مهم", "مهم جداً", "أولوية قصوى"] },
+  { id: "q9", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "ما التوقع الزمني المنطقي بين الترقيات المتتالية في رأيك؟", options: ["سنة واحدة", "٢-٣ سنوات", "٣-٤ سنوات", "٤-٥ سنوات", "حسب الأداء فقط"] },
+  { id: "q10", section: "المسار الوظيفي والترقيات", type: "radio", required: true, text: "ما الذي تراه أكثر تأثيراً في قرارات الترقية؟", options: ["الأداء والإنتاجية", "سنوات الخبرة", "المؤهلات والشهادات", "التوصيات الإدارية", "الفرص المتاحة"] },
+  { id: "q11", section: "المسار الوظيفي والترقيات", type: "open", required: false, text: "ما اقتراحاتك لتحسين مسار الترقيات والتطور الوظيفي؟" },
+  { id: "q12", section: "التدريب والتطوير المهني", type: "rating5", required: true, text: "الشركة توفر فرص تدريب وتطوير كافية تلبي احتياجاتي المهنية.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q13", section: "التدريب والتطوير المهني", type: "yesno", required: true, text: "هل تلقيت دعماً من الشركة لحضور دورات تدريبية أو الحصول على شهادات مهنية خارجية؟", options: ["نعم", "لا", "لا أعرف"] },
+  { id: "q14", section: "التدريب والتطوير المهني", type: "radio", required: true, text: "مقارنةً بالشركات الأخرى في القطاع، كيف تقيّم مستوى الدعم التدريبي في أساس؟", options: ["أقل بكثير", "أقل قليلاً", "مماثل", "أفضل قليلاً", "أفضل بكثير"] },
+  { id: "q17", section: "التدريب والتطوير المهني", type: "open", required: false, text: "ما القطاعات أو المجالات التي تودّ أن تطوّر فيها مهاراتك؟" },
+  { id: "q18", section: "التواصل والشفافية المؤسسية", type: "rating5", required: true, text: "تتواصل الإدارة العليا مع الموظفين بشفافية وانتظام.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q19", section: "التواصل والشفافية المؤسسية", type: "rating5", required: true, text: "أشعر أن آرائي واقتراحاتي تُؤخذ بجدية من قِبَل الإدارة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q20", section: "التواصل والشفافية المؤسسية", type: "rating5", required: true, text: "أتلقى معلومات كافية عن التوجه الاستراتيجي للشركة ومستقبلها.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q23", section: "التواصل والشفافية المؤسسية", type: "open", required: false, text: "ما أكبر فجوة في التواصل تلاحظها بين الموظفين والإدارة؟" },
+  { id: "q24", section: "مستقبل الشركة وانتماء الموظف", type: "rating5", required: true, text: "أفهم التوجه الاستراتيجي لشركة أساس في المرحلة الراهنة بوضوح.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q25", section: "مستقبل الشركة وانتماء الموظف", type: "rating5", required: true, text: "أشعر بالاطمئنان على مستقبلي الوظيفي في الشركة.", labels: ["لا أوافق بشدة", "لا أوافق", "محايد", "أوافق", "أوافق بشدة"] },
+  { id: "q26", section: "مستقبل الشركة وانتماء الموظف", type: "radio", required: true, text: "التغييرات والتطورات المؤسسية الأخيرة أثّرت على روحي المعنوية بشكل:", options: ["سلبي جداً", "سلبي نوعاً ما", "محايد", "إيجابي نوعاً ما", "إيجابي جداً"] },
+  { id: "q27", section: "مستقبل الشركة وانتماء الموظف", type: "radio", required: true, text: "المعلومات التي تلقيتها عن مستقبل الشركة بعد الانتقال إلى مجموعة عمران كانت:", options: ["غير كافية على الإطلاق", "غير كافية", "كافية نوعاً ما", "كافية", "وافية جداً"] },
+  { id: "q28", section: "مستقبل الشركة وانتماء الموظف", type: "open", required: false, text: "ما المعلومات أو القرارات التي تودّ أن تكون أكثر وضوحاً بالنسبة لك؟" },
+  { id: "q29", section: "المزايا والتقدير الوظيفي", type: "rating5", required: true, text: "أشعر أن جهودي ومساهماتي تُقدَّر بشكل مناسب من قِبَل الشركة.", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
+  { id: "q30", section: "المزايا والتقدير الوظيفي", type: "rating5", required: true, text: "مزايا الموظفين الحالية (صحة، إجازات، مكافآت...) تلبي توقعاتي.", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
+  { id: "q31", section: "المزايا والتقدير الوظيفي", type: "yesno", required: true, text: "هل تعتقد أنه يجب أن يحظى الموظفون بمزايا من مشاريع الشركة (فنادق، طيران، إلخ)؟", options: ["نعم", "لا", "لا أعرف"] },
+  { id: "q33", section: "المزايا والتقدير الوظيفي", type: "open", required: false, text: "اقتراحات محددة لتحسين منظومة المزايا والتقدير:" },
+  { id: "q34", section: "الرضا العام", type: "rating5", required: true, text: "بشكل عام، مدى رضاك عن بيئة العمل في أساس:", labels: ["غير راضٍ تماماً", "غير راضٍ", "محايد", "راضٍ", "راضٍ جداً"] },
+  { id: "q35", section: "الرضا العام", type: "radio", required: true, text: "ما احتمالية توصيتك لأحد المقربين بالعمل في شركة أساس؟", options: ["١-٢ (غير محتمل)", "٣-٤", "٥-٦", "٧-٨", "٩-١٠ (محتمل جداً)"] },
+  { id: "q36", section: "الرضا العام", type: "open", required: false, text: "ما الشيء الواحد الذي لو تغيّر سيحسن تجربتك في العمل بشكل كبير؟" },
+  { id: "q37", section: "الرضا العام", type: "open", required: false, text: "ما التحدي الذي تشعر أن الإدارة لا تقدّره بما يكفي في الوقت الحالي؟" },
+  { id: "q38", section: "الرضا العام", type: "open", required: false, text: "ما المهارات أو السمات التي تراها ضرورية للقادة في أساس؟" },
+  { id: "q39", section: "الرضا العام", type: "open", required: false, text: "أي تعليق أو مقترح تودّ مشاركته مع الإدارة:" },
+];
+
+const LOGO_SVG = `<svg viewBox="0 0 120 60" xmlns="http://www.w3.org/2000/svg" width="140" height="70">
+<text x="10" y="40" font-size="28" font-weight="800" fill="#1B3F6E" font-family="Arial,sans-serif">ASAAS</text>
+<text x="10" y="55" font-size="11" fill="#2E73B8" font-family="Arial,sans-serif">أساس</text>
+<rect x="95" y="5" width="6" height="6" fill="#2DADA0" rx="1"/>
+<rect x="103" y="5" width="6" height="6" fill="#4A9B3C" rx="1"/>
+<rect x="95" y="13" width="6" height="6" fill="#2E73B8" rx="1"/>
+<rect x="103" y="13" width="6" height="6" fill="#5BB3E0" rx="1"/>
+</svg>`;
+
+
+// ── Storage (localStorage) ──────────────────────────────────────────
+function storageGet(key) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; }
+}
+function storageSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch { return false; }
+}
+
+
+// ─── Styles ────────────────────────────────────────────────────────
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Tajawal', sans-serif; direction: rtl; background: #F5F7FA; color: #1A2332; }
+  .app { min-height: 100vh; }
+  .nav { background: #1B3F6E; color: white; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 64px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
+  .nav-logo { display: flex; align-items: center; gap: 12px; }
+  .nav-logo-icon { width: 36px; height: 36px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .nav-title { font-size: 18px; font-weight: 700; color: white; }
+  .nav-tabs { display: flex; gap: 4px; }
+  .nav-tab { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.7); transition: all 0.2s; border: none; background: transparent; }
+  .nav-tab:hover { background: rgba(255,255,255,0.1); color: white; }
+  .nav-tab.active { background: rgba(255,255,255,0.2); color: white; }
+  .nav-badge { background: #2DADA0; color: white; font-size: 11px; padding: 2px 7px; border-radius: 10px; margin-right: 6px; }
+  .page { max-width: 900px; margin: 0 auto; padding: 32px 20px; }
+  .card { background: white; border-radius: 12px; border: 1px solid #E1E8F0; padding: 24px; margin-bottom: 20px; }
+  .card-sm { background: white; border-radius: 10px; border: 1px solid #E1E8F0; padding: 16px 20px; }
+  .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; font-family: 'Tajawal', sans-serif; }
+  .btn-primary { background: #1B3F6E; color: white; }
+  .btn-primary:hover { background: #2E73B8; }
+  .btn-teal { background: #2DADA0; color: white; }
+  .btn-teal:hover { background: #249B8F; }
+  .btn-danger { background: #E74C3C; color: white; }
+  .btn-danger:hover { background: #C0392B; }
+  .btn-ghost { background: transparent; color: #1B3F6E; border: 1px solid #1B3F6E; }
+  .btn-ghost:hover { background: #F0F4FA; }
+  .btn-sm { padding: 6px 14px; font-size: 13px; }
+  .btn-xs { padding: 4px 10px; font-size: 12px; }
+  .section-header { font-size: 22px; font-weight: 800; color: #1B3F6E; margin-bottom: 8px; }
+  .section-sub { font-size: 14px; color: #6B7A8D; margin-bottom: 24px; }
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-blue { background: #EBF3FB; color: #1B3F6E; }
+  .badge-teal { background: #E4F6F5; color: #1B6B65; }
+  .badge-green { background: #EBF6E8; color: #2A6B1D; }
+  .badge-orange { background: #FEF3E2; color: #8B5A00; }
+  .badge-red { background: #FDECEA; color: #8B1E1E; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 24px; }
+  .metric { background: #F5F7FA; border-radius: 10px; padding: 16px; }
+  .metric-label { font-size: 12px; color: #6B7A8D; margin-bottom: 6px; }
+  .metric-value { font-size: 28px; font-weight: 800; color: #1B3F6E; }
+  .metric-sub { font-size: 12px; color: #6B7A8D; margin-top: 2px; }
+  .q-item { background: white; border: 1px solid #E1E8F0; border-radius: 10px; padding: 18px 20px; margin-bottom: 12px; }
+  .q-text { font-size: 15px; font-weight: 600; color: #1A2332; margin-bottom: 14px; line-height: 1.5; }
+  .q-section-label { font-size: 11px; color: #6B7A8D; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .rating-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rating-btn { min-width: 44px; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #E1E8F0; background: white; cursor: pointer; font-size: 14px; font-weight: 600; color: #6B7A8D; transition: all 0.2s; font-family: 'Tajawal', sans-serif; text-align: center; }
+  .rating-btn:hover { border-color: #2E73B8; color: #2E73B8; }
+  .rating-btn.selected { background: #1B3F6E; border-color: #1B3F6E; color: white; }
+  .rating-labels { display: flex; justify-content: space-between; margin-top: 6px; }
+  .rating-label-text { font-size: 11px; color: #6B7A8D; }
+  .radio-group { display: flex; flex-direction: column; gap: 8px; }
+  .radio-opt { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #E1E8F0; cursor: pointer; transition: all 0.2s; background: white; }
+  .radio-opt:hover { border-color: #2E73B8; background: #F0F6FE; }
+  .radio-opt.selected { border-color: #1B3F6E; background: #EBF3FB; }
+  .radio-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #C5D0DC; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .radio-dot.selected { border-color: #1B3F6E; }
+  .radio-dot-inner { width: 8px; height: 8px; border-radius: 50%; background: #1B3F6E; }
+  .radio-text { font-size: 14px; color: #1A2332; }
+  .text-area { width: 100%; padding: 12px 14px; border: 1.5px solid #E1E8F0; border-radius: 8px; font-size: 14px; font-family: 'Tajawal', sans-serif; resize: vertical; min-height: 100px; direction: rtl; outline: none; transition: border-color 0.2s; }
+  .text-area:focus { border-color: #2E73B8; }
+  .input { width: 100%; padding: 10px 14px; border: 1.5px solid #E1E8F0; border-radius: 8px; font-size: 14px; font-family: 'Tajawal', sans-serif; direction: rtl; outline: none; transition: border-color 0.2s; }
+  .input:focus { border-color: #2E73B8; }
+  .select { width: 100%; padding: 10px 14px; border: 1.5px solid #E1E8F0; border-radius: 8px; font-size: 14px; font-family: 'Tajawal', sans-serif; direction: rtl; outline: none; background: white; }
+  .progress-bar-bg { background: #E1E8F0; border-radius: 4px; height: 8px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .survey-hero { background: linear-gradient(135deg, #1B3F6E 0%, #2E73B8 100%); border-radius: 16px; padding: 40px 32px; text-align: center; color: white; margin-bottom: 28px; }
+  .survey-hero h1 { font-size: 26px; font-weight: 800; margin-bottom: 8px; }
+  .survey-hero p { font-size: 15px; opacity: 0.85; max-width: 500px; margin: 0 auto 20px; line-height: 1.6; }
+  .section-divider { display: flex; align-items: center; gap: 12px; margin: 28px 0 20px; }
+  .section-divider-line { flex: 1; height: 1px; background: #E1E8F0; }
+  .section-divider-text { font-size: 16px; font-weight: 700; color: #1B3F6E; white-space: nowrap; }
+  .success-screen { text-align: center; padding: 60px 20px; }
+  .success-icon { width: 80px; height: 80px; background: #E4F6F5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 40px; }
+  .chart-bar-h { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .chart-bar-label { font-size: 13px; color: #1A2332; min-width: 120px; text-align: right; }
+  .chart-bar-track { flex: 1; height: 24px; background: #F0F4FA; border-radius: 4px; overflow: hidden; }
+  .chart-bar-track-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; }
+  .chart-bar-count { font-size: 12px; color: #6B7A8D; min-width: 40px; }
+  .toggle-wrap { display: flex; align-items: center; gap: 12px; }
+  .toggle { position: relative; width: 48px; height: 26px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: #C5D0DC; border-radius: 13px; cursor: pointer; transition: 0.2s; }
+  .toggle-slider:before { content: ''; position: absolute; width: 20px; height: 20px; right: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+  .toggle input:checked + .toggle-slider { background: #2DADA0; }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(-22px); }
+  .table-wrap { overflow-x: auto; }
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data-table th { background: #F5F7FA; padding: 10px 14px; text-align: right; font-weight: 600; color: #6B7A8D; border-bottom: 1px solid #E1E8F0; }
+  table.data-table td { padding: 10px 14px; border-bottom: 1px solid #F0F4FA; color: #1A2332; }
+  table.data-table tr:hover td { background: #FAFBFD; }
+  .ai-bubble { background: #EBF3FB; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; border-right: 4px solid #2E73B8; }
+  .ai-bubble-header { font-size: 12px; color: #2E73B8; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .ai-bubble-text { font-size: 14px; color: #1A2332; line-height: 1.7; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #E1E8F0; border-top-color: #2E73B8; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .tab-group { display: flex; border-bottom: 1px solid #E1E8F0; margin-bottom: 24px; }
+  .tab-item { padding: 10px 18px; cursor: pointer; font-size: 14px; font-weight: 500; color: #6B7A8D; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.2s; }
+  .tab-item:hover { color: #1B3F6E; }
+  .tab-item.active { color: #1B3F6E; border-bottom-color: #1B3F6E; }
+  .drag-handle { cursor: grab; color: #C5D0DC; font-size: 18px; margin-left: 8px; }
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: 14px; margin-bottom: 16px; }
+  .alert-info { background: #EBF3FB; color: #1B3F6E; border: 1px solid #B5D4F4; }
+  .alert-success { background: #E8F8F2; color: #1A5E3F; border: 1px solid #9FE1CB; }
+  .alert-warning { background: #FEF3E2; color: #7D4A00; border: 1px solid #FAC775; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 12px; margin: 2px; }
+  .required-star { color: #E74C3C; margin-right: 3px; }
+  .report-section { margin-bottom: 32px; }
+  .report-section h3 { font-size: 18px; font-weight: 700; color: #1B3F6E; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #E1E8F0; }
+  .score-circle { width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; }
+  .flex { display: flex; }
+  .flex-col { flex-direction: column; }
+  .items-center { align-items: center; }
+  .justify-between { justify-content: space-between; }
+  .gap-2 { gap: 8px; }
+  .gap-3 { gap: 12px; }
+  .gap-4 { gap: 16px; }
+  .mt-1 { margin-top: 4px; }
+  .mt-2 { margin-top: 8px; }
+  .mt-3 { margin-top: 12px; }
+  .mt-4 { margin-top: 16px; }
+  .mb-1 { margin-bottom: 4px; }
+  .mb-2 { margin-bottom: 8px; }
+  .mb-3 { margin-bottom: 12px; }
+  .mb-4 { margin-bottom: 16px; }
+  .text-sm { font-size: 13px; }
+  .text-xs { font-size: 12px; }
+  .text-muted { color: #6B7A8D; }
+  .text-bold { font-weight: 700; }
+  .text-navy { color: #1B3F6E; }
+  .text-teal { color: #2DADA0; }
+  .w-full { width: 100%; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media(max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } .nav-tabs { display: none; } .mobile-menu-btn { display: flex; } }
+  .mobile-menu-btn { display: none; }
+  .floating-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #1B3F6E; display: none; padding: 8px 0; z-index: 200; }
+  @media(max-width: 600px) { .floating-nav { display: flex; justify-content: space-around; } }
+  .fnav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; color: rgba(255,255,255,0.6); font-size: 10px; cursor: pointer; padding: 4px; }
+  .fnav-item.active { color: white; }
+  .fnav-icon { font-size: 20px; }
+  @media(max-width: 600px) { .page { padding-bottom: 80px; } }
+`;
+
+// ─── Main App ──────────────────────────────────────────────────────
+function App() {
+  const [page, setPage] = useState("survey");
+  const [questions, setQuestions] = useState(() => storageGet("asaas_questions") || INITIAL_QUESTIONS);
+  const [responses, setResponses] = useState(() => storageGet("asaas_responses") || []);
+  const [surveyActive, setSurveyActive] = useState(() => { const v = storageGet("asaas_active"); return v !== null ? v : true; });
+  const [analysisCache, setAnalysisCache] = useState({});
+
+  const saveQuestions = (qs) => { setQuestions(qs); storageSet("asaas_questions", qs); };
+  const saveResponses = (rs) => { setResponses(rs); storageSet("asaas_responses", rs); };
+  const toggleActive = (val) => { setSurveyActive(val); storageSet("asaas_active", val); };
+
+  return (
+    <>
+      <style>{css}</style>
+      <div className="app">
+        <nav className="nav">
+          <div className="nav-logo">
+            <div className="nav-logo-icon">
+              <svg viewBox="0 0 28 28" width="24" height="24">
+                <rect x="2" y="2" width="11" height="11" rx="2" fill="#2DADA0"/>
+                <rect x="15" y="2" width="11" height="11" rx="2" fill="#4A9B3C"/>
+                <rect x="2" y="15" width="11" height="11" rx="2" fill="#1B3F6E"/>
+                <rect x="15" y="15" width="11" height="11" rx="2" fill="#5BB3E0"/>
+              </svg>
+            </div>
+            <span className="nav-title">أساس | الاستبيان</span>
+          </div>
+          <div className="nav-tabs">
+            {[["survey","الاستبيان"],["admin","لوحة التحكم"],["analytics","التحليلات"],["report","التقرير"]].map(([id, label]) => (
+              <button key={id} className={`nav-tab ${page === id ? "active" : ""}`} onClick={() => setPage(id)}>
+                {id === "analytics" && responses.length > 0 && <span className="nav-badge">{responses.length}</span>}
+                {label}
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        {page === "survey" && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={(r) => { const rs = [...responses, { ...r, id: Date.now(), submittedAt: new Date().toISOString() }]; saveResponses(rs); }} />}
+        {page === "admin" && <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleActive} onSaveQuestions={saveQuestions} onClearResponses={() => { saveResponses([]); setAnalysisCache({}); }} />}
+        {page === "analytics" && <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache} />}
+        {page === "report" && <ReportPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache} />}
+
+        <div className="floating-nav">
+          {[["survey","📋","الاستبيان"],["admin","⚙️","الإدارة"],["analytics","📊","التحليلات"],["report","📄","التقرير"]].map(([id, icon, label]) => (
+            <div key={id} className={`fnav-item ${page === id ? "active" : ""}`} onClick={() => setPage(id)}>
+              <span className="fnav-icon">{icon}</span>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Survey Page ───────────────────────────────────────────────────
+function SurveyPage({ questions, surveyActive, onSubmit }) {
+  const [answers, setAnswers] = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const sections = [...new Set(questions.map(q => q.section))];
+  const totalRequired = questions.filter(q => q.required).length;
+  const answeredRequired = questions.filter(q => q.required && answers[q.id] !== undefined && answers[q.id] !== "").length;
+  const progress = totalRequired > 0 ? Math.round((answeredRequired / totalRequired) * 100) : 0;
+
+  if (!surveyActive) return (
+    <div className="page">
+      <div className="success-screen">
+        <div className="success-icon">🔒</div>
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>الاستبيان غير متاح حالياً</h2>
+        <p style={{ color: "#6B7A8D", fontSize: 15 }}>تم إيقاف الاستبيان مؤقتاً من قِبَل الإدارة.</p>
+      </div>
+    </div>
+  );
+
+  if (submitted) return (
+    <div className="page">
+      <div className="success-screen">
+        <div className="success-icon">✅</div>
+        <h2 style={{ fontSize: 24, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>شكراً على مشاركتك!</h2>
+        <p style={{ color: "#6B7A8D", fontSize: 15, maxWidth: 400, margin: "0 auto 24px", lineHeight: 1.7 }}>تم استلام إجاباتك بنجاح. ستُعالَج بسرية تامة وستُسهم في تحسين بيئة العمل.</p>
+        <button className="btn btn-teal" onClick={() => { setAnswers({}); setSubmitted(false); }}>ملء استبيان جديد</button>
+      </div>
+    </div>
+  );
+
+  const setAnswer = (id, val) => {
+    setAnswers(a => ({ ...a, [id]: val }));
+    setErrors(e => { const n = { ...e }; delete n[id]; return n; });
+  };
+
+  const handleSubmit = async () => {
+    const newErrors = {};
+    questions.filter(q => q.required).forEach(q => {
+      if (!answers[q.id] || answers[q.id] === "") newErrors[q.id] = true;
+    });
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
+    setSubmitting(true);
+    await onSubmit(answers);
+    setSubmitting(false);
+    setSubmitted(true);
+  };
+
+  return (
+    <div className="page">
+      <div className="survey-hero">
+        <h1>استبيان رضا الموظفين وتطلعاتهم</h1>
+        <p>آراؤكم هي البوصلة التي نسترشد بها لبناء بيئة عمل أفضل. جميع الإجابات سرية تماماً.</p>
+        <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 13 }}>التقدم: {progress}%</span>
+          <div style={{ width: 160, height: 6, background: "rgba(255,255,255,0.3)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ width: `${progress}%`, height: "100%", background: "#2DADA0", borderRadius: 3, transition: "width 0.3s" }}></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="alert alert-info">🔒 جميع إجاباتكم ستُعامَل بسرية تامة — المدة المتوقعة: 10-15 دقيقة</div>
+
+      {sections.map(section => {
+        const sectionQs = questions.filter(q => q.section === section);
+        return (
+          <div key={section}>
+            <div className="section-divider">
+              <div className="section-divider-line"></div>
+              <div className="section-divider-text">📌 {section}</div>
+              <div className="section-divider-line"></div>
+            </div>
+            {sectionQs.map(q => (
+              <div key={q.id} className="q-item" style={errors[q.id] ? { border: "1.5px solid #E74C3C" } : {}}>
+                <div className="q-text">
+                  {q.required && <span className="required-star">*</span>}
+                  {q.text}
+                </div>
+                <QuestionInput q={q} value={answers[q.id]} onChange={(v) => setAnswer(q.id, v)} />
+                {errors[q.id] && <p style={{ color: "#E74C3C", fontSize: 12, marginTop: 6 }}>هذا السؤال مطلوب</p>}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      <div style={{ textAlign: "center", paddingTop: 16 }}>
+        <button className="btn btn-primary" style={{ padding: "14px 48px", fontSize: 16 }} onClick={handleSubmit} disabled={submitting}>
+          {submitting ? <span className="spinner"></span> : "إرسال الاستبيان ✉️"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuestionInput({ q, value, onChange }) {
+  if (q.type === "rating5") {
+    return (
+      <div>
+        <div className="rating-row">
+          {(q.labels || ["١","٢","٣","٤","٥"]).map((lbl, i) => (
+            <button key={i} className={`rating-btn ${value === i + 1 ? "selected" : ""}`} onClick={() => onChange(i + 1)} style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{i + 1}</div>
+              <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.8, lineHeight: 1.2, marginTop: 2 }}>{lbl}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (q.type === "radio" || q.type === "yesno") {
+    const opts = q.options || q.labels || [];
+    return (
+      <div className="radio-group">
+        {opts.map((opt, i) => (
+          <div key={i} className={`radio-opt ${value === opt ? "selected" : ""}`} onClick={() => onChange(opt)}>
+            <div className={`radio-dot ${value === opt ? "selected" : ""}`}>{value === opt && <div className="radio-dot-inner"></div>}</div>
+            <span className="radio-text">{opt}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (q.type === "open") {
+    return <textarea className="text-area" placeholder="اكتب إجابتك هنا..." value={value || ""} onChange={e => onChange(e.target.value)} />;
+  }
+  return null;
+}
+
+// ─── Admin Page ────────────────────────────────────────────────────
+function AdminPage({ questions, responses, surveyActive, onToggleActive, onSaveQuestions, onClearResponses }) {
+  const [tab, setTab] = useState("questions");
+  const [editing, setEditing] = useState(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [newQ, setNewQ] = useState({ text: "", type: "rating5", section: "الرضا العام", required: true, options: ["خيار ١", "خيار ٢", "خيار ٣"], labels: ["لا أوافق بشدة","لا أوافق","محايد","أوافق","أوافق بشدة"] });
+
+  const sections = [...new Set(questions.map(q => q.section))];
+
+  const deleteQ = (id) => onSaveQuestions(questions.filter(q => q.id !== id));
+  const toggleRequired = (id) => onSaveQuestions(questions.map(q => q.id === id ? { ...q, required: !q.required } : q));
+  const moveUp = (idx) => { if (idx === 0) return; const qs = [...questions]; [qs[idx-1], qs[idx]] = [qs[idx], qs[idx-1]]; onSaveQuestions(qs); };
+  const moveDown = (idx) => { if (idx === questions.length - 1) return; const qs = [...questions]; [qs[idx], qs[idx+1]] = [qs[idx+1], qs[idx]]; onSaveQuestions(qs); };
+
+  const addQuestion = () => {
+    const q = { ...newQ, id: "q_" + Date.now(), options: newQ.type === "open" ? [] : newQ.options };
+    onSaveQuestions([...questions, q]);
+    setShowNewForm(false);
+    setNewQ({ text: "", type: "rating5", section: "الرضا العام", required: true, options: ["خيار ١", "خيار ٢", "خيار ٣"], labels: ["لا أوافق بشدة","لا أوافق","محايد","أوافق","أوافق بشدة"] });
+  };
+
+  return (
+    <div className="page">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="section-header">لوحة التحكم</h2>
+          <p className="section-sub">إدارة الاستبيان والأسئلة والإجابات</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted">حالة الاستبيان:</span>
+          <label className="toggle">
+            <input type="checkbox" checked={surveyActive} onChange={e => onToggleActive(e.target.checked)} />
+            <span className="toggle-slider"></span>
+          </label>
+          <span className={`badge ${surveyActive ? "badge-teal" : "badge-red"}`}>{surveyActive ? "مفعّل" : "موقوف"}</span>
+        </div>
+      </div>
+
+      <div className="metric-grid">
+        <div className="metric"><div className="metric-label">إجمالي الإجابات</div><div className="metric-value">{responses.length}</div></div>
+        <div className="metric"><div className="metric-label">عدد الأسئلة</div><div className="metric-value">{questions.length}</div></div>
+        <div className="metric"><div className="metric-label">الأقسام</div><div className="metric-value">{sections.length}</div></div>
+        <div className="metric"><div className="metric-label">آخر إجابة</div><div className="metric-value" style={{ fontSize: 14 }}>{responses.length > 0 ? new Date(responses[responses.length-1].submittedAt).toLocaleDateString("ar-OM") : "—"}</div></div>
+      </div>
+
+      <div className="tab-group">
+        {[["questions","الأسئلة"],["responses","الإجابات"]].map(([id, label]) => (
+          <div key={id} className={`tab-item ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>{label}</div>
+        ))}
+      </div>
+
+      {tab === "questions" && (
+        <div>
+          <div className="flex justify-between mb-3">
+            <span className="text-sm text-muted">{questions.length} سؤال في الاستبيان</span>
+            <button className="btn btn-teal btn-sm" onClick={() => setShowNewForm(true)}>+ إضافة سؤال</button>
+          </div>
+
+          {showNewForm && (
+            <div className="card" style={{ border: "2px solid #2DADA0", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1B3F6E", marginBottom: 16 }}>إضافة سؤال جديد</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <label className="text-sm text-muted mb-1">نص السؤال</label>
+                  <input className="input" value={newQ.text} onChange={e => setNewQ(n => ({ ...n, text: e.target.value }))} placeholder="اكتب نص السؤال..." />
+                </div>
+                <div className="grid-2">
+                  <div>
+                    <label className="text-sm text-muted mb-1">نوع السؤال</label>
+                    <select className="select" value={newQ.type} onChange={e => setNewQ(n => ({ ...n, type: e.target.value }))}>
+                      <option value="rating5">تقييم خماسي</option>
+                      <option value="radio">اختيار من متعدد</option>
+                      <option value="yesno">نعم / لا</option>
+                      <option value="open">سؤال مفتوح</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm text-muted mb-1">القسم</label>
+                    <input className="input" value={newQ.section} onChange={e => setNewQ(n => ({ ...n, section: e.target.value }))} placeholder="اسم القسم" />
+                  </div>
+                </div>
+                {(newQ.type === "radio") && (
+                  <div>
+                    <label className="text-sm text-muted mb-1">الخيارات (مفصولة بفاصلة)</label>
+                    <input className="input" value={newQ.options.join("، ")} onChange={e => setNewQ(n => ({ ...n, options: e.target.value.split("،").map(s => s.trim()) }))} />
+                  </div>
+                )}
+                <div className="flex items-center gap-3 mt-2">
+                  <label className="toggle"><input type="checkbox" checked={newQ.required} onChange={e => setNewQ(n => ({ ...n, required: e.target.checked }))} /><span className="toggle-slider"></span></label>
+                  <span className="text-sm">سؤال مطلوب</span>
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button className="btn btn-teal btn-sm" onClick={addQuestion} disabled={!newQ.text}>حفظ السؤال</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShowNewForm(false)}>إلغاء</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {sections.map(section => (
+            <div key={section}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#1B3F6E", margin: "20px 0 10px", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ background: "#EBF3FB", padding: "3px 10px", borderRadius: 6 }}>{section}</span>
+                <span className="text-xs text-muted">({questions.filter(q => q.section === section).length} أسئلة)</span>
+              </div>
+              {questions.map((q, idx) => q.section !== section ? null : (
+                <div key={q.id} className="card-sm flex items-center gap-3 mb-2" style={{ position: "relative" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <button onClick={() => moveUp(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#C5D0DC", fontSize: 12, lineHeight: 1 }}>▲</button>
+                    <button onClick={() => moveDown(idx)} style={{ background: "none", border: "none", cursor: "pointer", color: "#C5D0DC", fontSize: 12, lineHeight: 1 }}>▼</button>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, color: "#1A2332", fontWeight: 500, lineHeight: 1.5 }}>{q.text}</div>
+                    <div className="flex gap-2 mt-1" style={{ flexWrap: "wrap" }}>
+                      <span className="chip" style={{ background: "#EBF3FB", color: "#1B3F6E" }}>{q.type === "rating5" ? "تقييم" : q.type === "radio" ? "اختيار" : q.type === "yesno" ? "نعم/لا" : "مفتوح"}</span>
+                      {q.required && <span className="chip" style={{ background: "#FDECEA", color: "#8B1E1E" }}>مطلوب</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="btn btn-ghost btn-xs" onClick={() => toggleRequired(q.id)}>{q.required ? "اختياري" : "مطلوب"}</button>
+                    <button className="btn btn-danger btn-xs" onClick={() => deleteQ(q.id)}>حذف</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "responses" && (
+        <div>
+          <div className="flex justify-between mb-3 items-center">
+            <span className="text-sm text-muted">{responses.length} إجابة مستلمة</span>
+            {responses.length > 0 && (
+              <button className="btn btn-danger btn-sm" onClick={() => setConfirmClear(true)}>مسح جميع الإجابات</button>
+            )}
+          </div>
+          {confirmClear && (
+            <div className="alert alert-warning mb-3">
+              هل أنت متأكد من مسح جميع الإجابات؟ لا يمكن التراجع عن هذا الإجراء.
+              <div className="flex gap-2 mt-2">
+                <button className="btn btn-danger btn-xs" onClick={() => { onClearResponses(); setConfirmClear(false); }}>نعم، امسح الكل</button>
+                <button className="btn btn-ghost btn-xs" onClick={() => setConfirmClear(false)}>إلغاء</button>
+              </div>
+            </div>
+          )}
+          {responses.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "48px 0", color: "#6B7A8D" }}>لا توجد إجابات حتى الآن</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>تاريخ الإرسال</th>
+                    <th>القسم</th>
+                    <th>الخبرة</th>
+                    <th>الرضا العام</th>
+                    <th>احتمالية التوصية</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {responses.map((r, i) => (
+                    <tr key={r.id}>
+                      <td>{i + 1}</td>
+                      <td>{new Date(r.submittedAt).toLocaleDateString("ar-OM")}</td>
+                      <td>{r.q_dept || "—"}</td>
+                      <td>{r.q_exp || "—"}</td>
+                      <td>{r.q34 ? `${r.q34}/5` : "—"}</td>
+                      <td>{r.q35 || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Analytics Page ────────────────────────────────────────────────
+function AnalyticsPage({ questions, responses, analysisCache, setAnalysisCache }) {
+  const [tab, setTab] = useState("overview");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [openAnalysis, setOpenAnalysis] = useState(null);
+
+  if (responses.length === 0) return (
+    <div className="page">
+      <div className="success-screen">
+        <div className="success-icon">📊</div>
+        <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>لا توجد بيانات للتحليل</h2>
+        <p style={{ color: "#6B7A8D" }}>انتظر حتى يملأ الموظفون الاستبيان.</p>
+      </div>
+    </div>
+  );
+
+  const ratingQs = questions.filter(q => q.type === "rating5");
+  const choiceQs = questions.filter(q => q.type === "radio" || q.type === "yesno");
+  const openQs = questions.filter(q => q.type === "open");
+
+  const avgRating = (qId) => {
+    const vals = responses.map(r => r[qId]).filter(v => v !== undefined);
+    if (!vals.length) return 0;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  };
+
+  const overallSatisfaction = avgRating("q34");
+  const overallScore = Math.round(overallSatisfaction * 20);
+  const scoreColor = overallScore >= 70 ? BRAND.teal : overallScore >= 50 ? BRAND.warning : BRAND.danger;
+
+  const npsResponses = responses.map(r => r.q35).filter(Boolean);
+  const promoters = npsResponses.filter(v => v.includes("٩-١٠")).length;
+  const detractors = npsResponses.filter(v => v.includes("١-٢") || v.includes("٣-٤")).length;
+  const nps = npsResponses.length > 0 ? Math.round(((promoters - detractors) / npsResponses.length) * 100) : 0;
+
+  const sectionScores = [...new Set(ratingQs.map(q => q.section))].map(section => {
+    const sQs = ratingQs.filter(q => q.section === section);
+    const avg = sQs.reduce((sum, q) => sum + avgRating(q.id), 0) / sQs.length;
+    return { section, avg };
+  });
+
+  const analyzeOpenQ = async (qId, qText, answers) => {
+    if (analysisCache[qId]) { setOpenAnalysis({ qId, qText, result: analysisCache[qId] }); return; }
+    setAiLoading(true);
+    setOpenAnalysis({ qId, qText, result: null });
+    try {
+      const sampleAnswers = answers.slice(0, 20).filter(Boolean);
+      if (sampleAnswers.length === 0) { setOpenAnalysis({ qId, qText, result: "لا توجد إجابات لهذا السؤال." }); setAiLoading(false); return; }
+      const prompt = `أنت محلل موارد بشرية خبير. قم بتحليل إجابات الموظفين التالية على سؤال الاستبيان وتلخيصها باللغة العربية في نقاط محددة. حدد الموضوعات المتكررة والمخاوف الرئيسية والمقترحات الإيجابية.
+
+السؤال: ${qText}
+
+الإجابات:
+${sampleAnswers.map((a, i) => `${i+1}. ${a}`).join("\n")}
+
+قدم التحليل في شكل:
+**الموضوعات الرئيسية:** (نقاط)
+**المخاوف المتكررة:** (نقاط)
+**المقترحات الإيجابية:** (نقاط)
+**ملخص عام:** (جملتان)`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text || "تعذر التحليل.";
+      setAnalysisCache(c => ({ ...c, [qId]: text }));
+      setOpenAnalysis({ qId, qText, result: text });
+    } catch (e) {
+      setOpenAnalysis({ qId, qText, result: "حدث خطأ أثناء التحليل. حاول مرة أخرى." });
+    }
+    setAiLoading(false);
+  };
+
+  return (
+    <div className="page">
+      <h2 className="section-header">التحليلات والنتائج</h2>
+      <p className="section-sub">بناءً على {responses.length} إجابة مستلمة</p>
+
+      <div className="tab-group">
+        {[["overview","نظرة عامة"],["questions","تحليل الأسئلة"],["open","الأسئلة المفتوحة"]].map(([id, label]) => (
+          <div key={id} className={`tab-item ${tab === id ? "active" : ""}`} onClick={() => setTab(id)}>{label}</div>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <div>
+          <div className="metric-grid">
+            <div className="metric">
+              <div className="metric-label">إجمالي المشاركين</div>
+              <div className="metric-value">{responses.length}</div>
+            </div>
+            <div className="metric">
+              <div className="metric-label">الرضا العام</div>
+              <div className="metric-value" style={{ color: scoreColor }}>{overallScore}%</div>
+              <div className="metric-sub">{overallSatisfaction.toFixed(1)} / 5</div>
+            </div>
+            <div className="metric">
+              <div className="metric-label">مؤشر الترشيح NPS</div>
+              <div className="metric-value" style={{ color: nps >= 30 ? BRAND.teal : nps >= 0 ? BRAND.warning : BRAND.danger }}>{nps}</div>
+            </div>
+            <div className="metric">
+              <div className="metric-label">أعلى نقطة رضا</div>
+              <div className="metric-value" style={{ fontSize: 14 }}>
+                {sectionScores.length > 0 ? sectionScores.reduce((a, b) => a.avg > b.avg ? a : b).section.substring(0, 12) + "..." : "—"}
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1B3F6E", marginBottom: 16 }}>الرضا حسب المحور</h3>
+            {sectionScores.map(({ section, avg }) => {
+              const pct = Math.round(avg * 20);
+              const color = pct >= 70 ? "#2DADA0" : pct >= 50 ? "#F39C12" : "#E74C3C";
+              return (
+                <div key={section} className="mb-3">
+                  <div className="flex justify-between mb-1">
+                    <span style={{ fontSize: 13, color: "#1A2332" }}>{section}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color }}>{pct}%</span>
+                  </div>
+                  <div className="progress-bar-bg">
+                    <div className="progress-bar-fill" style={{ width: `${pct}%`, background: color }}></div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid-2">
+            <div className="card">
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1B3F6E", marginBottom: 14 }}>توزيع الأقسام</h3>
+              <BarChart data={["العمليات","التقنية","المالية","الموارد البشرية","أخرى"].map(opt => ({
+                label: opt, count: responses.filter(r => r.q_dept === opt).length
+              })).filter(d => d.count > 0)} total={responses.length} color="#2E73B8" />
+            </div>
+            <div className="card">
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1B3F6E", marginBottom: 14 }}>توزيع سنوات الخبرة</h3>
+              <BarChart data={["أقل من سنة","١-٣ سنوات","٤-٦ سنوات","٧-١٠ سنوات","أكثر من ١٠ سنوات"].map(opt => ({
+                label: opt, count: responses.filter(r => r.q_exp === opt).length
+              })).filter(d => d.count > 0)} total={responses.length} color="#2DADA0" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === "questions" && (
+        <div>
+          {ratingQs.map(q => {
+            const avg = avgRating(q.id);
+            const dist = [1,2,3,4,5].map(v => responses.filter(r => r[q.id] === v).length);
+            return (
+              <div key={q.id} className="card mb-3">
+                <div style={{ fontSize: 13, color: "#6B7A8D", marginBottom: 4 }}>📌 {q.section}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A2332", marginBottom: 12 }}>{q.text}</div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div style={{ fontSize: 32, fontWeight: 800, color: avg >= 4 ? "#2DADA0" : avg >= 3 ? "#F39C12" : "#E74C3C" }}>{avg.toFixed(1)}</div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#6B7A8D" }}>المتوسط / 5</div>
+                    <div style={{ fontSize: 12, color: "#6B7A8D" }}>{responses.filter(r => r[q.id]).length} إجابة</div>
+                  </div>
+                </div>
+                <BarChart data={(q.labels || ["١","٢","٣","٤","٥"]).map((lbl, i) => ({ label: lbl, count: dist[i] }))} total={responses.length} color="#2E73B8" />
+              </div>
+            );
+          })}
+          {choiceQs.map(q => {
+            const opts = q.options || q.labels || [];
+            return (
+              <div key={q.id} className="card mb-3">
+                <div style={{ fontSize: 13, color: "#6B7A8D", marginBottom: 4 }}>📌 {q.section}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A2332", marginBottom: 12 }}>{q.text}</div>
+                <BarChart data={opts.map(opt => ({ label: opt, count: responses.filter(r => r[q.id] === opt).length }))} total={responses.length} color="#4A9B3C" />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {tab === "open" && (
+        <div>
+          {openAnalysis && (
+            <div className="ai-bubble mb-4">
+              <div className="ai-bubble-header">✨ تحليل الذكاء الاصطناعي — {openAnalysis.qText?.substring(0, 40)}...</div>
+              {aiLoading && !openAnalysis.result ? (
+                <div className="flex items-center gap-2"><div className="spinner"></div><span className="text-sm text-muted">جاري التحليل...</span></div>
+              ) : (
+                <div className="ai-bubble-text" style={{ whiteSpace: "pre-wrap" }}>{openAnalysis.result}</div>
+              )}
+            </div>
+          )}
+          {openQs.map(q => {
+            const answers = responses.map(r => r[q.id]).filter(Boolean);
+            return (
+              <div key={q.id} className="card mb-3">
+                <div style={{ fontSize: 13, color: "#6B7A8D", marginBottom: 4 }}>📌 {q.section}</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: "#1A2332", marginBottom: 12 }}>{q.text}</div>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="badge badge-blue">{answers.length} إجابة</span>
+                  <button className="btn btn-teal btn-sm" onClick={() => analyzeOpenQ(q.id, q.text, answers)} disabled={answers.length === 0 || aiLoading}>
+                    {aiLoading && openAnalysis?.qId === q.id ? <span className="spinner"></span> : "✨ تحليل بالذكاء الاصطناعي"}
+                  </button>
+                </div>
+                {answers.slice(0, 5).map((ans, i) => (
+                  <div key={i} style={{ padding: "10px 14px", background: "#F5F7FA", borderRadius: 8, marginBottom: 8, fontSize: 13, color: "#1A2332", lineHeight: 1.6 }}>
+                    "{ans}"
+                  </div>
+                ))}
+                {answers.length > 5 && <p className="text-xs text-muted" style={{ marginTop: 4 }}>+ {answers.length - 5} إجابة أخرى</p>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BarChart({ data, total, color }) {
+  const max = Math.max(...data.map(d => d.count), 1);
+  return (
+    <div>
+      {data.map(({ label, count }, i) => (
+        <div key={i} className="chart-bar-h">
+          <div className="chart-bar-label">{label}</div>
+          <div className="chart-bar-track">
+            <div className="chart-bar-track-fill" style={{ width: `${Math.round((count / max) * 100)}%`, background: color }}>
+              {count > 0 && <span style={{ fontSize: 11, color: "white", fontWeight: 700 }}>{count}</span>}
+            </div>
+          </div>
+          <div className="chart-bar-count">{total > 0 ? Math.round((count / total) * 100) : 0}%</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Report Page ───────────────────────────────────────────────────
+function ReportPage({ questions, responses, analysisCache, setAnalysisCache }) {
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const avgRating = (qId) => {
+    const vals = responses.map(r => r[qId]).filter(v => v !== undefined);
+    if (!vals.length) return 0;
+    return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+  };
+
+  const generateReport = async () => {
+    if (responses.length === 0) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const ratingQs = questions.filter(q => q.type === "rating5");
+      const openQs = questions.filter(q => q.type === "open");
+      const openAnswers = openQs.map(q => ({
+        question: q.text,
+        answers: responses.map(r => r[q.id]).filter(Boolean).slice(0, 10)
+      }));
+
+      const statsData = ratingQs.map(q => ({
+        question: q.text,
+        section: q.section,
+        avg: avgRating(q.id),
+        responses: responses.filter(r => r[q.id]).length
+      }));
+
+      const prompt = `أنت خبير موارد بشرية واستشاري تنظيمي. قم بإعداد تقرير تنفيذي شامل باللغة العربية بناءً على نتائج استبيان رضا موظفي شركة أساس.
+
+**إحصاءات الاستبيان:**
+- عدد المشاركين: ${responses.length}
+- تاريخ التقرير: ${new Date().toLocaleDateString("ar-OM")}
+
+**متوسطات التقييم (من 5):**
+${statsData.map(s => `- ${s.section} | ${s.question.substring(0,50)}: ${s.avg}/5`).join("\n")}
+
+**عينة من الإجابات المفتوحة:**
+${openAnswers.filter(o => o.answers.length > 0).slice(0, 5).map(o => `السؤال: ${o.question}\nالإجابات:\n${o.answers.slice(0,3).map((a,i) => `  ${i+1}. ${a}`).join("\n")}`).join("\n\n")}
+
+قم بكتابة تقرير تنفيذي احترافي يتضمن الأقسام التالية (استخدم نفس العناوين بالضبط):
+
+## ملخص تنفيذي
+## أبرز النتائج
+## مخاوف الموظفين
+## توقعات الموظفين
+## نقاط القوة
+## مجالات التحسين
+## التوصيات والإجراءات المقترحة
+## خطة تحسين التواصل المؤسسي
+
+اجعل التقرير دقيقاً ومحدداً ومبنياً على البيانات المتاحة. استخدم لغة مهنية واضحة.`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, messages: [{ role: "user", content: prompt }] })
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text || "تعذر إنشاء التقرير.";
+      setReport(text);
+    } catch (e) {
+      setError("حدث خطأ أثناء إنشاء التقرير. تأكد من الاتصال بالإنترنت وحاول مرة أخرى.");
+    }
+    setLoading(false);
+  };
+
+  const ratingQs = questions.filter(q => q.type === "rating5");
+  const overallAvg = responses.length > 0 ? (responses.reduce((sum, r) => sum + (r.q34 || 0), 0) / responses.filter(r => r.q34).length || 0) : 0;
+
+  return (
+    <div className="page">
+      <h2 className="section-header">التقرير الشامل</h2>
+      <p className="section-sub">تقرير تنفيذي مُولَّد بالذكاء الاصطناعي بناءً على نتائج الاستبيان</p>
+
+      {responses.length === 0 ? (
+        <div className="success-screen">
+          <div className="success-icon">📄</div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1B3F6E", marginBottom: 8 }}>لا توجد بيانات كافية</h2>
+          <p style={{ color: "#6B7A8D" }}>يحتاج التقرير إلى إجابات لتحليلها.</p>
+        </div>
+      ) : (
+        <>
+          <div className="card" style={{ background: "linear-gradient(135deg, #1B3F6E, #2E73B8)", color: "white" }}>
+            <div className="flex justify-between items-center" style={{ flexWrap: "wrap", gap: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: "white", marginBottom: 4 }}>تقرير رضا الموظفين — شركة أساس</h3>
+                <p style={{ fontSize: 13, opacity: 0.8 }}>{new Date().toLocaleDateString("ar-OM", { year: "numeric", month: "long", day: "numeric" })} • {responses.length} مشارك</p>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 40, fontWeight: 800, color: "#2DADA0" }}>{Math.round(overallAvg * 20)}%</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>الرضا العام</div>
+              </div>
+            </div>
+          </div>
+
+          {!report && (
+            <div style={{ textAlign: "center", padding: "40px 0" }}>
+              <p style={{ color: "#6B7A8D", marginBottom: 20, fontSize: 15 }}>اضغط لإنشاء التقرير التنفيذي الكامل باستخدام الذكاء الاصطناعي.</p>
+              <button className="btn btn-primary" style={{ padding: "14px 40px", fontSize: 16 }} onClick={generateReport} disabled={loading}>
+                {loading ? <span style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="spinner"></span>جاري إنشاء التقرير...</span> : "✨ إنشاء التقرير الشامل"}
+              </button>
+              {error && <p style={{ color: "#E74C3C", marginTop: 12, fontSize: 14 }}>{error}</p>}
+            </div>
+          )}
+
+          {report && <ReportDisplay report={report} responses={responses} questions={questions} avgRating={avgRating} onRegenerate={generateReport} loading={loading} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ReportDisplay({ report, responses, questions, avgRating, onRegenerate, loading }) {
+  const sections = report.split(/## /).filter(Boolean).map(s => {
+    const lines = s.trim().split("\n");
+    return { title: lines[0].trim(), content: lines.slice(1).join("\n").trim() };
+  });
+
+  const icons = { "ملخص تنفيذي": "📋", "أبرز النتائج": "🔍", "مخاوف الموظفين": "⚠️", "توقعات الموظفين": "💡", "نقاط القوة": "✅", "مجالات التحسين": "📈", "التوصيات والإجراءات المقترحة": "🎯", "خطة تحسين التواصل المؤسسي": "📣" };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <span className="badge badge-teal">✨ مُولَّد بالذكاء الاصطناعي</span>
+        <button className="btn btn-ghost btn-sm" onClick={onRegenerate} disabled={loading}>{loading ? "جاري التحديث..." : "إعادة إنشاء التقرير"}</button>
+      </div>
+
+      <div className="metric-grid mb-4">
+        {questions.filter(q => q.type === "rating5").slice(0, 4).map(q => {
+          const avg = parseFloat(avgRating(q.id));
+          return (
+            <div key={q.id} className="metric">
+              <div className="metric-label" style={{ fontSize: 11 }}>{q.text.substring(0, 35)}...</div>
+              <div className="metric-value" style={{ fontSize: 24, color: avg >= 4 ? BRAND.teal : avg >= 3 ? BRAND.warning : BRAND.danger }}>{avg.toFixed(1)}/5</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {sections.map(({ title, content }, i) => (
+        <div key={i} className="report-section">
+          <div className="card">
+            <h3 style={{ fontSize: 17, fontWeight: 700, color: "#1B3F6E", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>{icons[title] || "📌"}</span> {title}
+            </h3>
+            <div style={{ fontSize: 14, color: "#1A2332", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+              {content.split("\n").map((line, j) => {
+                if (line.startsWith("**") && line.endsWith("**")) {
+                  return <div key={j} style={{ fontWeight: 700, color: "#1B3F6E", marginTop: 10, marginBottom: 4 }}>{line.replace(/\*\*/g, "")}</div>;
+                }
+                if (line.startsWith("- ") || line.startsWith("• ")) {
+                  return <div key={j} style={{ paddingRight: 16, marginBottom: 6, display: "flex", gap: 8 }}><span style={{ color: "#2DADA0", flexShrink: 0 }}>◆</span><span>{line.substring(2)}</span></div>;
+                }
+                if (line.match(/^\d+\./)) {
+                  return <div key={j} style={{ paddingRight: 8, marginBottom: 6 }}><strong style={{ color: "#1B3F6E" }}>{line.split(".")[0]}.</strong> {line.split(".").slice(1).join(".")}</div>;
+                }
+                return line ? <p key={j} style={{ marginBottom: 8 }}>{line}</p> : <div key={j} style={{ height: 4 }}></div>;
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
