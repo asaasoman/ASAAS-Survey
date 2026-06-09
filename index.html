@@ -18,6 +18,24 @@
     #root{min-height:100vh}
     .en{display:block;font-size:0.78em;color:#8A97A8;font-weight:400;margin-top:1px;direction:ltr;text-align:right}
     .editable-hint:hover{background:rgba(45,173,160,.07);border-radius:4px;outline:1px dashed #2DADA0}
+    .drag-handle{cursor:grab;color:#C8D0DA;font-size:18px;padding:0 6px;user-select:none;flex-shrink:0;line-height:1;transition:color .15s}
+    .drag-handle:hover{color:#2E73B8}
+    .drag-handle:active{cursor:grabbing}
+    .q-item-wrap{position:relative;display:flex;align-items:flex-start;gap:0}
+    .q-item-wrap .q-item{flex:1;min-width:0}
+    .q-admin-bar{display:flex;flex-direction:column;align-items:center;gap:4px;padding:14px 2px 14px 0;justify-content:flex-start}
+    .q-move-btn{background:none;border:none;cursor:pointer;color:#C8D0DA;font-size:13px;line-height:1;padding:2px 5px;border-radius:4px;transition:all .15s;font-family:monospace}
+    .q-move-btn:hover{background:#EBF3FB;color:#1B3F6E}
+    .q-del-btn{background:none;border:none;cursor:pointer;color:#E5A5A0;font-size:14px;line-height:1;padding:2px 5px;border-radius:4px;transition:all .15s}
+    .q-del-btn:hover{background:#FDECEA;color:#E74C3C}
+    .add-q-panel{background:white;border:2px dashed #2DADA0;border-radius:12px;padding:20px;margin:16px 0;animation:fadeIn .2s ease}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+    .add-q-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border:2px dashed #C8D0DA;border-radius:10px;background:transparent;cursor:pointer;color:#6B7A8D;font-size:13px;font-family:'Tajawal',sans-serif;transition:all .2s;margin-top:8px}
+    .add-q-btn:hover{border-color:#2DADA0;color:#2DADA0;background:rgba(45,173,160,.04)}
+    .opt-del{background:none;border:none;cursor:pointer;color:#DCA8A8;font-size:13px;padding:1px 5px;border-radius:4px;transition:all .15s;flex-shrink:0}
+    .opt-del:hover{background:#FDECEA;color:#E74C3C}
+    .dragging{opacity:0.45;border:2px dashed #2DADA0 !important}
+    .drag-over{border-top:3px solid #2DADA0 !important}
     .btn .en{display:inline;font-size:0.8em;opacity:0.85}
   </style>
 </head>
@@ -439,15 +457,23 @@ function QInput({q, value, onChange, isAdmin=false, onRenameOption, onRenameOpti
     return (
       <div className="radio-grp">
         {(q.options||[]).map((opt, i) => (
-          <div key={i} className={`radio-opt${value===opt?" sel":""}`} onClick={() => !isAdmin && onChange(opt)}>
-            <div className={`rdot${value===opt?" sel":""}`} onClick={()=>isAdmin?null:null}>{value===opt&&<div className="rdot-inner"/>}</div>
+          <div key={i} className={`radio-opt${value===opt?" sel":""}`}
+            style={{alignItems:"flex-start",gap:8}}
+            onClick={() => !isAdmin && onChange(opt)}>
+            <div className={`rdot${value===opt?" sel":""}`} style={{marginTop:3,flexShrink:0}}>
+              {value===opt&&<div className="rdot-inner"/>}
+            </div>
             {isAdmin ? (
-              <EditableOpt
-                arVal={ar(opt)} enVal={en(opt)}
-                isAdmin={true}
-                onChangeAr={v => onRenameOption && onRenameOption(i, v)}
-                onChangeEn={v => onRenameOptionEn && onRenameOptionEn(i, v)}
-              ><span/></EditableOpt>
+              <span style={{flex:1,display:"flex",alignItems:"flex-start",gap:4,minWidth:0}}>
+                <EditableOpt
+                  arVal={ar(opt)} enVal={en(opt)}
+                  isAdmin={true}
+                  onChangeAr={v => onRenameOption && onRenameOption(i, v)}
+                  onChangeEn={v => onRenameOptionEn && onRenameOptionEn(i, v)}
+                ><span/></EditableOpt>
+                <button className="opt-del" title="حذف الخيار / Delete option"
+                  onClick={e=>{e.stopPropagation(); onRenameOption && onRenameOption("DEL",i);}}>✕</button>
+              </span>
             ) : (
               <span className="r-opt-text" onClick={()=>onChange(opt)}>
                 {ar(opt)}
@@ -457,11 +483,11 @@ function QInput({q, value, onChange, isAdmin=false, onRenameOption, onRenameOpti
           </div>
         ))}
         {isAdmin && (
-          <button
-            className="btn btn-ghost btn-xs"
+          <button className="btn btn-ghost btn-xs"
             style={{marginTop:6,alignSelf:"flex-start"}}
-            onClick={e=>{e.stopPropagation(); onRenameOption && onRenameOption("ADD","");}}
-          >+ إضافة خيار / Add option</button>
+            onClick={e=>{e.stopPropagation(); onRenameOption && onRenameOption("ADD","");}}>
+            + إضافة خيار / Add option
+          </button>
         )}
       </div>
     );
@@ -472,8 +498,136 @@ function QInput({q, value, onChange, isAdmin=false, onRenameOption, onRenameOpti
   return null;
 }
 
+
+// ── Add Question Button + Mini Form ──────────────────────────────────
+function AddQuestionButton({section, onAdd}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    textAr:"سؤال جديد", textEn:"New Question",
+    type:"radio", required:false,
+    optsAr:"خيار ١، خيار ٢، خيار ٣",
+    optsEn:"Option 1, Option 2, Option 3",
+    labelsAr:"لا أوافق بشدة، لا أوافق، محايد، أوافق، أوافق بشدة",
+    labelsEn:"Strongly Disagree, Disagree, Neutral, Agree, Strongly Agree"
+  });
+
+  const TYPES=[
+    ["radio","اختيار متعدد / Multiple choice"],
+    ["yesno","نعم/لا — Yes/No"],
+    ["rating5","تقييم خماسي / 5-point rating"],
+    ["open","مفتوح / Open-ended"]
+  ];
+
+  const handleSave = () => {
+    const arOpts = form.optsAr.split("،").map(s=>s.trim()).filter(Boolean);
+    const enOpts = form.optsEn.split(",").map(s=>s.trim()).filter(Boolean);
+    const arLbls = form.labelsAr.split("،").map(s=>s.trim()).filter(Boolean);
+    const enLbls = form.labelsEn.split(",").map(s=>s.trim()).filter(Boolean);
+
+    const options = form.type==="yesno"
+      ? ["نعم|Yes","لا|No","لا أعرف|Not Sure"]
+      : form.type==="radio"
+        ? arOpts.map((a,i)=>`${a}|${enOpts[i]||a}`)
+        : [];
+    const labels = form.type==="rating5"
+      ? arLbls.map((a,i)=>`${a}|${enLbls[i]||a}`)
+      : [];
+
+    onAdd({
+      id: "q_"+Date.now(),
+      section,
+      text: `${form.textAr}|${form.textEn}`,
+      type: form.type,
+      required: form.required,
+      options,
+      labels
+    });
+    setOpen(false);
+    setForm({textAr:"سؤال جديد",textEn:"New Question",type:"radio",required:false,
+      optsAr:"خيار ١، خيار ٢، خيار ٣",optsEn:"Option 1, Option 2, Option 3",
+      labelsAr:"لا أوافق بشدة، لا أوافق، محايد، أوافق، أوافق بشدة",
+      labelsEn:"Strongly Disagree, Disagree, Neutral, Agree, Strongly Agree"});
+  };
+
+  return (
+    <div style={{marginBottom:8}}>
+      {!open && (
+        <button className="add-q-btn" onClick={()=>setOpen(true)}>
+          <span style={{fontSize:18}}>＋</span>
+          <span>إضافة سؤال إلى هذا القسم <span style={{fontSize:11,opacity:.7}}>/ Add question to this section</span></span>
+        </button>
+      )}
+      {open && (
+        <div className="add-q-panel">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <span style={{fontSize:14,fontWeight:700,color:"#1B3F6E"}}>
+              إضافة سؤال جديد <span style={{fontSize:11,fontWeight:400,color:"#6B7A8D"}}>/ Add new question</span>
+            </span>
+            <button onClick={()=>setOpen(false)} style={{background:"none",border:"none",cursor:"pointer",color:"#6B7A8D",fontSize:18,lineHeight:1}}>✕</button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div>
+                <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>نص السؤال (عربي)</div>
+                <input className="inp" dir="rtl" value={form.textAr} onChange={e=>setForm(f=>({...f,textAr:e.target.value}))} placeholder="نص السؤال..."/>
+              </div>
+              <div>
+                <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>Question text (English)</div>
+                <input className="inp" dir="ltr" value={form.textEn} onChange={e=>setForm(f=>({...f,textEn:e.target.value}))} placeholder="Question text..."/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>نوع السؤال / Type</div>
+                <select className="sel-field" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+                  {TYPES.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                </select>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6,paddingBottom:4}}>
+                <label className="toggle" style={{width:38,height:22}}>
+                  <input type="checkbox" checked={form.required} onChange={e=>setForm(f=>({...f,required:e.target.checked}))}/>
+                  <span className="tog-sl"/>
+                </label>
+                <span style={{fontSize:12,color:"#1A2332"}}>مطلوب/Required</span>
+              </div>
+            </div>
+            {form.type==="radio" && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div>
+                  <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>الخيارات (عربي، مفصولة بـ ،)</div>
+                  <textarea className="txt-area" dir="rtl" style={{minHeight:64}} value={form.optsAr} onChange={e=>setForm(f=>({...f,optsAr:e.target.value}))}/>
+                </div>
+                <div>
+                  <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>Options (English, comma separated)</div>
+                  <textarea className="txt-area" dir="ltr" style={{minHeight:64}} value={form.optsEn} onChange={e=>setForm(f=>({...f,optsEn:e.target.value}))}/>
+                </div>
+              </div>
+            )}
+            {form.type==="rating5" && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div>
+                  <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>التسميات (عربي، مفصولة بـ ،)</div>
+                  <textarea className="txt-area" dir="rtl" style={{minHeight:64}} value={form.labelsAr} onChange={e=>setForm(f=>({...f,labelsAr:e.target.value}))}/>
+                </div>
+                <div>
+                  <div style={{fontSize:11,color:"#6B7A8D",marginBottom:3}}>Labels (English, comma separated)</div>
+                  <textarea className="txt-area" dir="ltr" style={{minHeight:64}} value={form.labelsEn} onChange={e=>setForm(f=>({...f,labelsEn:e.target.value}))}/>
+                </div>
+              </div>
+            )}
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setOpen(false)}>إلغاء / Cancel</button>
+              <button className="btn btn-teal btn-sm" onClick={handleSave}>حفظ وإضافة / Save & Add</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Survey Page ───────────────────────────────────────────────────────
-function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameOption, onEditQuestion, onEditSection}) {
+function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameOption, onEditQuestion, onEditSection, onMoveQuestion, onDeleteQuestion, onAddQuestion}) {
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState({});
@@ -544,9 +698,19 @@ function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameO
         <span className="en">All responses will be treated with complete confidentiality — Estimated time: 10–15 minutes</span>
       </div>
       {isAdmin && (
-        <div className="alert" style={{background:"#FFF8E6",border:"1px solid #FAC775",color:"#7D4A00",marginBottom:14}}>
-          ✎ وضع الإدارة: انقر على أيقونة القلم بجانب أي قسم لتعديل اسمه مباشرةً
-          <span className="en">Admin mode: click the ✎ pencil icon next to any department name to rename it inline</span>
+        <div className="alert" style={{background:"#FFF8E6",border:"1px solid #FAC775",color:"#7D4A00",marginBottom:14,lineHeight:1.7}}>
+          ⚙️ <strong>وضع الإدارة / Admin Mode</strong>
+          <span className="en" style={{marginTop:4,display:"block"}}>
+            ✎ Click any text to edit it inline (AR &amp; EN) &nbsp;|&nbsp;
+            ⠿ Drag questions to reorder &nbsp;|&nbsp;
+            ▲▼ Use arrows to move up/down &nbsp;|&nbsp;
+            🗑 Delete a question &nbsp;|&nbsp;
+            ＋ Add new question below each section &nbsp;|&nbsp;
+            ✕ Remove an option
+          </span>
+          <span style={{fontSize:11,display:"block",marginTop:3}}>
+            انقر على أي نص لتعديله • اسحب السؤال لإعادة ترتيبه • ▲▼ للتحريك • 🗑 حذف السؤال • ＋ إضافة سؤال • ✕ حذف خيار
+          </span>
         </div>
       )}
       {sections.map(sec => (
@@ -565,44 +729,76 @@ function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameO
             </div>
             <div className="sec-div-line"/>
           </div>
-          {questions.filter(q=>q.section===sec).map(q => (
-            <div key={q.id} className="q-item" style={errors[q.id]?{border:"1.5px solid #E74C3C"}:{}}>
-              <div className="q-text">
-                {q.required && <span className="req-star">*</span>}
-                {isAdmin ? (
-                  <span style={{display:"flex",flexDirection:"column",gap:3}}>
-                    <InlineEdit value={ar(q.text)} onSave={v=>onEditQuestion(q.id,v,'ar')} dir="rtl"
-                      style={{fontWeight:600,fontSize:14,color:"#1A2332"}} />
-                    <InlineEdit value={en(q.text)||""} onSave={v=>onEditQuestion(q.id,v,'en')} dir="ltr"
-                      style={{fontSize:11,color:"#6B7A8D",fontWeight:400}} isSmall={true} placeholder="English question text..." />
-                  </span>
-                ) : (
-                  <span>
-                    {ar(q.text)}
-                    {en(q.text) && <span className="en">{en(q.text)}</span>}
-                  </span>
+          {questions.map((q,globalIdx) => q.section!==sec ? null : (
+            <div key={q.id} className="q-item-wrap" draggable={isAdmin}
+              onDragStart={e=>{if(isAdmin){e.dataTransfer.setData("qid",q.id);e.currentTarget.classList.add("dragging");}}}
+              onDragEnd={e=>e.currentTarget.classList.remove("dragging")}
+              onDragOver={e=>{if(isAdmin){e.preventDefault();e.currentTarget.classList.add("drag-over");}}}
+              onDragLeave={e=>e.currentTarget.classList.remove("drag-over")}
+              onDrop={e=>{
+                e.currentTarget.classList.remove("drag-over");
+                if(!isAdmin)return;
+                const fromId=e.dataTransfer.getData("qid");
+                if(fromId===q.id)return;
+                onMoveQuestion(fromId,q.id);
+              }}
+            >
+              {isAdmin && (
+                <div className="q-admin-bar">
+                  <span className="drag-handle" title="اسحب لإعادة الترتيب / Drag to reorder">⠿</span>
+                  <button className="q-move-btn" title="تحريك لأعلى / Move up" onClick={()=>onMoveQuestion(q.id,'UP')}>▲</button>
+                  <button className="q-move-btn" title="تحريك لأسفل / Move down" onClick={()=>onMoveQuestion(q.id,'DOWN')}>▼</button>
+                  <button className="q-del-btn" title="حذف السؤال / Delete question" onClick={()=>onDeleteQuestion(q.id)}>🗑</button>
+                </div>
+              )}
+              <div className="q-item" style={{...(errors[q.id]?{border:"1.5px solid #E74C3C"}:{}),flex:1,minWidth:0}}>
+                <div className="q-text">
+                  {q.required && <span className="req-star">*</span>}
+                  {isAdmin ? (
+                    <span style={{display:"flex",flexDirection:"column",gap:3}}>
+                      <InlineEdit value={ar(q.text)} onSave={v=>onEditQuestion(q.id,v,'ar')} dir="rtl"
+                        style={{fontWeight:600,fontSize:14,color:"#1A2332"}} />
+                      <InlineEdit value={en(q.text)||""} onSave={v=>onEditQuestion(q.id,v,'en')} dir="ltr"
+                        style={{fontSize:11,color:"#6B7A8D",fontWeight:400}} isSmall={true} placeholder="English question text..." />
+                    </span>
+                  ) : (
+                    <span>
+                      {ar(q.text)}
+                      {en(q.text) && <span className="en">{en(q.text)}</span>}
+                    </span>
+                  )}
+                </div>
+                <QInput q={q} value={answers[q.id]} onChange={v=>setAnswer(q.id,v)}
+                  isAdmin={isAdmin}
+                  onRenameOption={(idx,name)=>onRenameOption(q.id,idx,name,'ar')}
+                  onRenameOptionEn={(idx,name)=>onRenameOption(q.id,idx,name,'en')}
+                  onEditQuestionText={(ar,en)=>onEditQuestion(q.id,ar,en)}
+                />
+                {errors[q.id] && (
+                  <p style={{color:"#E74C3C",fontSize:11,marginTop:5}}>
+                    هذا السؤال مطلوب / <em>This field is required</em>
+                  </p>
                 )}
               </div>
-              <QInput q={q} value={answers[q.id]} onChange={v=>setAnswer(q.id,v)}
-                isAdmin={isAdmin}
-                onRenameOption={(idx,name)=>onRenameOption(q.id,idx,name,'ar')}
-                onRenameOptionEn={(idx,name)=>onRenameOption(q.id,idx,name,'en')}
-                onEditQuestionText={(ar,en)=>onEditQuestion(q.id,ar,en)}
-              />
-              {errors[q.id] && (
-                <p style={{color:"#E74C3C",fontSize:11,marginTop:5}}>
-                  هذا السؤال مطلوب / <em>This field is required</em>
-                </p>
-              )}
             </div>
           ))}
+          {isAdmin && <AddQuestionButton section={sec} onAdd={onAddQuestion}/>}
         </div>
       ))}
-      <div style={{textAlign:"center",paddingTop:14}}>
-        <button className="btn btn-primary" style={{padding:"13px 44px",fontSize:15}} onClick={handleSubmit} disabled={submitting}>
-          {submitting ? <span className="spinner"/> : <>إرسال الاستبيان ✉️ <span style={{fontSize:12,opacity:.85}}>/ Submit Survey</span></>}
-        </button>
-      </div>
+      {!isAdmin && (
+        <div style={{textAlign:"center",paddingTop:14}}>
+          <button className="btn btn-primary" style={{padding:"13px 44px",fontSize:15}} onClick={handleSubmit} disabled={submitting}>
+            {submitting ? <span className="spinner"/> : <>إرسال الاستبيان ✉️ <span style={{fontSize:12,opacity:.85}}>/ Submit Survey</span></>}
+          </button>
+        </div>
+      )}
+      {isAdmin && (
+        <div style={{textAlign:"center",paddingTop:14,paddingBottom:8}}>
+          <button className="btn btn-primary" style={{padding:"13px 44px",fontSize:15}} onClick={handleSubmit} disabled={submitting}>
+            {submitting ? <span className="spinner"/> : <>إرسال الاستبيان ✉️ <span style={{fontSize:12,opacity:.85}}>/ Submit Survey</span></>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1081,8 +1277,12 @@ function App() {
       if(q.id !== qId) return q;
       const opts = [...q.options];
       if(optIdx === "ADD") {
-        // Add a new blank option
-        opts.push("قسم جديد|New Department");
+        opts.push("خيار جديد|New Option");
+        return {...q, options: opts};
+      }
+      if(optIdx === "DEL") {
+        // newName here holds the index to delete
+        opts.splice(newName, 1);
         return {...q, options: opts};
       }
       const old = opts[optIdx] || "";
@@ -1108,6 +1308,44 @@ function App() {
       return {...q, text: newText};
     });
     saveQ(updated);
+  };
+
+  // Move question (drag-drop or arrow buttons)
+  const handleMoveQuestion = (fromId, toIdOrDir) => {
+    const qs = [...questions];
+    const fromIdx = qs.findIndex(q=>q.id===fromId);
+    if(fromIdx===-1) return;
+    if(toIdOrDir==='UP') {
+      if(fromIdx===0) return;
+      [qs[fromIdx-1],qs[fromIdx]]=[qs[fromIdx],qs[fromIdx-1]];
+    } else if(toIdOrDir==='DOWN') {
+      if(fromIdx===qs.length-1) return;
+      [qs[fromIdx],qs[fromIdx+1]]=[qs[fromIdx+1],qs[fromIdx]];
+    } else {
+      // drag-drop: move fromId before toId
+      const toIdx = qs.findIndex(q=>q.id===toIdOrDir);
+      if(toIdx===-1) return;
+      const [moved] = qs.splice(fromIdx,1);
+      const insertAt = qs.findIndex(q=>q.id===toIdOrDir);
+      qs.splice(insertAt,0,moved);
+    }
+    saveQ(qs);
+  };
+
+  // Delete a question
+  const handleDeleteQuestion = (qId) => {
+    saveQ(questions.filter(q=>q.id!==qId));
+  };
+
+  // Add a new question
+  const handleAddQuestion = (newQ) => {
+    // Insert after the last question of the same section
+    const qs = [...questions];
+    let lastIdx = -1;
+    qs.forEach((q,i)=>{ if(q.section===newQ.section) lastIdx=i; });
+    if(lastIdx===-1) qs.push(newQ);
+    else qs.splice(lastIdx+1,0,newQ);
+    saveQ(qs);
   };
 
   // Edit section name (AR or EN)
@@ -1165,6 +1403,9 @@ function App() {
             onRenameOption={handleRenameOption}
             onEditQuestion={handleEditQuestion}
             onEditSection={handleEditSection}
+            onMoveQuestion={handleMoveQuestion}
+            onDeleteQuestion={handleDeleteQuestion}
+            onAddQuestion={handleAddQuestion}
           />}
         {page==="admin"    && <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleOn} onSaveQuestions={saveQ} onClearResponses={()=>{saveR([]);setAnalysisCache({});}}/>}
         {page==="analytics"&& <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache}/>}
