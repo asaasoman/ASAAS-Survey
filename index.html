@@ -52,9 +52,97 @@ const T = ({ ar, en, className="" }) => (
   </span>
 );
 
-// ── Storage ──────────────────────────────────────────────────────────
-function storageGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;}}
-function storageSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch{return false;}}
+// ── Storage: GitHub Gist (shared across all browsers) ────────────────
+//
+// HOW TO SET UP (one-time, 2 minutes):
+// 1. Go to https://gist.github.com
+// 2. Create a new SECRET gist, filename: asaas-data.json, content: {}
+// 3. Copy the Gist ID from the URL (the long hash after your username)
+// 4. Go to https://github.com/settings/tokens → Generate new token (classic)
+//    → check only "gist" scope → copy the token
+// 5. On the survey page, click ⚙ Setup in the nav (visible when logged in)
+//    and paste both values — they'll be saved locally and used for sync.
+//
+// After setup: ALL browsers read/write the same Gist → always in sync.
+
+function lsGet(k){try{const v=localStorage.getItem(k);return v!==null?JSON.parse(v):null;}catch{return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+
+// Default Gist ID — shared across all browsers automatically
+const DEFAULT_GIST_ID = "fdad02e578086b113b861d208e310cc5";
+
+function getGistConfig(){
+  return {
+    id:    lsGet("asaas_gist_id") || DEFAULT_GIST_ID,
+    token: lsGet("asaas_gist_token") || ""
+  };
+}
+
+// Read entire data object from Gist
+async function gistRead(){
+  const {id,token} = getGistConfig();
+  if(!id) return null;
+  try{
+    const headers = {"Accept":"application/vnd.github+json"};
+    if(token) headers["Authorization"]=`Bearer ${token}`;
+    const r = await fetch(`https://api.github.com/gists/${id}`,{headers});
+    if(!r.ok) return null;
+    const j = await r.json();
+    const content = j.files?.["asaas-data.json"]?.content;
+    return content ? JSON.parse(content) : null;
+  }catch{return null;}
+}
+
+// Write entire data object to Gist
+async function gistWrite(data){
+  const {id,token} = getGistConfig();
+  if(!id||!token) return false;
+  try{
+    const r = await fetch(`https://api.github.com/gists/${id}`,{
+      method:"PATCH",
+      headers:{"Accept":"application/vnd.github+json","Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
+      body:JSON.stringify({files:{"asaas-data.json":{content:JSON.stringify(data,null,2)}}})
+    });
+    return r.ok;
+  }catch{return false;}
+}
+
+// In-memory cache of the full remote data object
+let _remoteCache = null;
+
+// storageGet: read from Gist (or localStorage fallback)
+async function storageGet(k){
+  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return lsGet(k);
+  const {id} = getGistConfig();
+  // Always try Gist (DEFAULT_GIST_ID is always set)
+  if(!_remoteCache){
+    _remoteCache = await gistRead();
+    // Seed cache with localStorage values if gist is empty
+    if(_remoteCache && !_remoteCache.asaas_q){
+      const localQ = lsGet("asaas_q");
+      if(localQ) _remoteCache.asaas_q = localQ;
+    }
+  }
+  if(_remoteCache && k in _remoteCache) return _remoteCache[k];
+  return lsGet(k);
+}
+
+// storageSet: write to localStorage immediately + update Gist async
+async function storageSet(k, v){
+  lsSet(k, v);
+  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return true;
+  const {token} = getGistConfig();
+  if(!token) return true; // visitor: no token → skip remote write
+  if(!_remoteCache) _remoteCache = (await gistRead()) || {};
+  _remoteCache[k] = v;
+  gistWrite(_remoteCache); // async, don't await — UI stays responsive
+  return true;
+}
+
+// Force re-read from Gist (invalidate cache)
+function invalidateCache(){ _remoteCache = null; }
+
+// ── Storage: END ──────────────────────────────────────────────────────
 
 // ── Password ─────────────────────────────────────────────────────────
 const CORRECT_PW = "asaas_oman";
@@ -307,6 +395,89 @@ const GlobalStyle = () => (
 );
 
 
+
+
+// ── Gist Setup Modal ──────────────────────────────────────────────────
+function GistSetupModal({onClose}){
+  const [gistId,    setGistId]    = useState(lsGet("asaas_gist_id")||"");
+  const [token,     setToken]     = useState(lsGet("asaas_gist_token")||"");
+  const [testing,   setTesting]   = useState(false);
+  const [testResult,setTestResult]= useState(null);
+
+  const handleTest = async () => {
+    setTesting(true); setTestResult(null);
+    lsSet("asaas_gist_id", gistId.trim());
+    lsSet("asaas_gist_token", token.trim());
+    invalidateCache();
+    const data = await gistRead();
+    if(data!==null){
+      setTestResult({ok:true, msg:"✅ اتصال ناجح! / Connection successful!"});
+    } else {
+      setTestResult({ok:false, msg:"❌ تعذّر الاتصال. تحقق من الـ ID والـ Token / Connection failed. Check ID & Token."});
+    }
+    setTesting(false);
+  };
+
+  const handleSave = () => {
+    lsSet("asaas_gist_id", gistId.trim());
+    lsSet("asaas_gist_token", token.trim());
+    invalidateCache();
+    onClose(true);
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:16}}>
+      <div style={{background:"white",borderRadius:16,padding:28,maxWidth:540,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,.2)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+          <h3 style={{fontSize:17,fontWeight:800,color:"#1B3F6E"}}>
+            إعداد المزامنة المشتركة
+            <span className="en">Shared Sync Setup (GitHub Gist)</span>
+          </h3>
+          <button onClick={()=>onClose(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#6B7A8D",lineHeight:1}}>✕</button>
+        </div>
+
+        <div style={{background:"#EBF3FB",borderRadius:10,padding:"12px 14px",marginBottom:16,fontSize:12,color:"#1B3F6E",lineHeight:1.8}}>
+          <strong>خطوات الإعداد (مرة واحدة فقط):</strong><br/>
+          ١. اذهب إلى <a href="https://gist.github.com" target="_blank" style={{color:"#2E73B8"}}>gist.github.com</a> → أنشئ Gist جديد (Secret)<br/>
+          &nbsp;&nbsp;&nbsp;الاسم: <code style={{background:"#D6EAF8",padding:"1px 5px",borderRadius:3}}>asaas-data.json</code> المحتوى: <code style={{background:"#D6EAF8",padding:"1px 5px",borderRadius:3}}>{"{}"}</code><br/>
+          ٢. انسخ الـ <strong>Gist ID</strong> من الرابط (السلسلة الطويلة بعد اسم المستخدم)<br/>
+          ٣. اذهب إلى <a href="https://github.com/settings/tokens" target="_blank" style={{color:"#2E73B8"}}>github.com/settings/tokens</a> → New token (classic) → فعّل <code>gist</code> فقط<br/>
+          ٤. الصق القيمتين أدناه واضغط اختبار ثم حفظ
+          <br/><br/>
+          <span style={{direction:"ltr",display:"block",color:"#2E5F8E",fontSize:11}}>
+            After setup: every browser that opens the survey will read &amp; write the same data automatically.
+          </span>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div>
+            <label style={{fontSize:12,color:"#6B7A8D",display:"block",marginBottom:3}}>Gist ID</label>
+            <input className="inp" dir="ltr" placeholder="e.g. a1b2c3d4e5f6..." value={gistId} onChange={e=>setGistId(e.target.value)} style={{fontFamily:"monospace",fontSize:13}}/>
+          </div>
+          <div>
+            <label style={{fontSize:12,color:"#6B7A8D",display:"block",marginBottom:3}}>GitHub Token (gist scope)</label>
+            <input className="inp" dir="ltr" type="password" placeholder="ghp_xxxxxxxxxxxx" value={token} onChange={e=>setToken(e.target.value)} style={{fontFamily:"monospace",fontSize:13}}/>
+          </div>
+        </div>
+
+        {testResult && (
+          <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,background:testResult.ok?"#E8F8F2":"#FDECEA",color:testResult.ok?"#1A5E3F":"#8B1E1E",fontSize:13}}>
+            {testResult.msg}
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>handleTest()} disabled={!gistId.trim()||!token.trim()||testing}>
+            {testing ? <><span className="spinner" style={{width:14,height:14}}/> جاري الاختبار...</> : "🔌 اختبار الاتصال / Test"}
+          </button>
+          <button className="btn btn-teal btn-sm" onClick={handleSave} disabled={!gistId.trim()}>
+            💾 حفظ الإعدادات / Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Admin Gate (shown only when accessing admin pages without login) ──
 function AdminGate({onUnlock}) {
@@ -1306,20 +1477,50 @@ function ReportPage({questions, responses}) {
 
 // ── Root App ──────────────────────────────────────────────────────────
 function App() {
-  const [unlocked, setUnlocked] = useState(()=>storageGet("asaas_auth")===true);
+  const [unlocked, setUnlocked] = useState(()=>lsGet("asaas_auth")===true);
+  const [showSetup, setShowSetup] = useState(false);
   const [page, setPage] = useState("survey");
-  const [questions, setQuestions] = useState(()=>storageGet("asaas_q")||INITIAL_QUESTIONS);
-  const [responses, setResponses] = useState(()=>storageGet("asaas_r")||[]);
-  const [surveyActive, setSurveyActive] = useState(()=>{const v=storageGet("asaas_on");return v!==null?v:true;});
+  const [questions, setQuestions] = useState(()=>lsGet("asaas_q")||INITIAL_QUESTIONS);
+  const [responses, setResponses] = useState(()=>lsGet("asaas_r")||[]);
+  const [surveyActive, setSurveyActive] = useState(()=>{const v=lsGet("asaas_on");return v!==null?v:true;});
   const [analysisCache, setAnalysisCache] = useState({});
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState(null);
+  const [lastSync, setLastSync] = useState(null);
+
+  // Load shared data from cloud on mount
+  useEffect(()=>{
+    (async()=>{
+      setSyncing(true);
+      invalidateCache();
+      try{
+        const [qs, rs, on] = await Promise.all([
+          storageGet("asaas_q"),
+          storageGet("asaas_r"),
+          storageGet("asaas_on")
+        ]);
+        if(qs) setQuestions(qs);
+        if(rs) setResponses(rs);
+        if(on!==null) setSurveyActive(on);
+        setLastSync(new Date());
+        setSyncError(null);
+      }catch(e){
+        setSyncError("تعذّر المزامنة / Sync failed");
+      }
+      setSyncing(false);
+    })();
+  },[]);
 
   const saveQ = qs=>{setQuestions(qs);storageSet("asaas_q",qs);};
   const saveR = rs=>{setResponses(rs);storageSet("asaas_r",rs);};
   const toggleOn = v=>{setSurveyActive(v);storageSet("asaas_on",v);};
-  const handleSubmit = a=>{saveR([...responses,{...a,id:Date.now(),submittedAt:new Date().toISOString()}]);};
+  const handleSubmit = a=>{
+    const rs=[...responses,{...a,id:Date.now(),submittedAt:new Date().toISOString()}];
+    saveR(rs);
+  };
 
-  const handleUnlock = () => { storageSet("asaas_auth",true); setUnlocked(true); };
-  const handleLock = () => { storageSet("asaas_auth",false); setUnlocked(false); };
+  const handleUnlock = () => { lsSet("asaas_auth",true); setUnlocked(true); };
+  const handleLock = () => { lsSet("asaas_auth",false); setUnlocked(false); };
 
   // Rename / add option inline
   const handleRenameOption = (qId, optIdx, newName, lang='ar') => {
@@ -1435,7 +1636,18 @@ function App() {
                 <rect x="15" y="15" width="11" height="11" rx="2" fill="#5BB3E0"/>
               </svg>
             </div>
-            <span className="nav-title">أساس | ASAAS<span className="en">Employee Survey Platform</span></span>
+            <span className="nav-title">
+              أساس | ASAAS
+              <span className="en" style={{display:"flex",alignItems:"center",gap:4}}>
+                Employee Survey Platform
+                {syncing && <span style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:9,opacity:.8}}>
+                  <span style={{width:8,height:8,border:"1.5px solid rgba(255,255,255,.4)",borderTopColor:"#2DADA0",borderRadius:"50%",display:"inline-block",animation:"spin .8s linear infinite"}}/>
+                  مزامنة...
+                </span>}
+                {!syncing && lastSync && <span style={{fontSize:9,opacity:.6}}>✓ {lastSync.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span>}
+                {syncError && <span style={{fontSize:9,color:"#FAC775"}}>⚠ {syncError}</span>}
+              </span>
+            </span>
           </div>
           <div className="nav-tabs">
             {NAV.map(([id,ar_,en_,ic])=>(
@@ -1444,9 +1656,15 @@ function App() {
                 {ar_}<span className="en">{en_}</span>
               </button>
             ))}
+            {unlocked && (
+              <button className="nav-tab" onClick={()=>setShowSetup(true)} title="إعداد المزامنة / Sync Setup"
+                style={{marginRight:4,opacity:.7,fontSize:14,border:"1px solid rgba(255,255,255,.2)",borderRadius:6}}>
+                ⚙ <span style={{fontSize:9,display:"block",opacity:.7}}>مزامنة/Sync</span>
+              </button>
+            )}
             {unlocked
-              ? <button className="nav-tab" onClick={handleLock} title="تسجيل خروج / Logout" style={{marginRight:4,opacity:.7,fontSize:16,border:"1px solid rgba(255,255,255,.2)",borderRadius:6}}>🔓 <span style={{fontSize:9,display:"block",opacity:.7}}>خروج/Logout</span></button>
-              : <button className="nav-tab" onClick={()=>setPage("admin")} title="دخول الإدارة / Admin login" style={{marginRight:4,opacity:.5,fontSize:14}}>🔐 <span style={{fontSize:9,display:"block",opacity:.7}}>إدارة/Admin</span></button>
+              ? <button className="nav-tab" onClick={handleLock} title="تسجيل خروج / Logout" style={{opacity:.7,fontSize:14,border:"1px solid rgba(255,255,255,.2)",borderRadius:6}}>🔓 <span style={{fontSize:9,display:"block",opacity:.7}}>خروج/Logout</span></button>
+              : <button className="nav-tab" onClick={()=>setPage("admin")} title="دخول الإدارة / Admin login" style={{opacity:.5,fontSize:14}}>🔐 <span style={{fontSize:9,display:"block",opacity:.7}}>إدارة/Admin</span></button>
             }
           </div>
         </nav>
@@ -1463,6 +1681,23 @@ function App() {
         {page==="admin"    && (unlocked ? <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleOn} onSaveQuestions={saveQ} onClearResponses={()=>{saveR([]);setAnalysisCache({});}} /> : <AdminGate onUnlock={handleUnlock}/>)}
         {page==="analytics"&& (unlocked ? <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache}/> : <AdminGate onUnlock={handleUnlock}/>)}
         {page==="report"   && (unlocked ? <ReportPage questions={questions} responses={responses}/> : <AdminGate onUnlock={handleUnlock}/>)}
+
+        {showSetup && <GistSetupModal onClose={saved=>{
+          setShowSetup(false);
+          if(saved){
+            invalidateCache();
+            // Reload data from the newly configured Gist
+            (async()=>{
+              setSyncing(true);
+              const [qs,rs,on]=await Promise.all([storageGet("asaas_q"),storageGet("asaas_r"),storageGet("asaas_on")]);
+              if(qs)setQuestions(qs);
+              if(rs)setResponses(rs);
+              if(on!==null)setSurveyActive(on);
+              setLastSync(new Date());
+              setSyncing(false);
+            })();
+          }
+        }}/>}
 
         <div className="fnav fl">
           {NAV.map(([id,ar_,en_,ic])=>(
