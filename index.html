@@ -17,6 +17,7 @@
     body{font-family:'Tajawal',sans-serif;direction:rtl;background:#F5F7FA;color:#1A2332}
     #root{min-height:100vh}
     .en{display:block;font-size:0.78em;color:#8A97A8;font-weight:400;margin-top:1px;direction:ltr;text-align:right}
+    .editable-hint:hover{background:rgba(45,173,160,.07);border-radius:4px;outline:1px dashed #2DADA0}
     .btn .en{display:inline;font-size:0.8em;opacity:0.85}
   </style>
 </head>
@@ -333,44 +334,65 @@ function PasswordGate({onUnlock}) {
   );
 }
 
-// ── Editable Option (inline dept rename) ─────────────────────────────
-function EditableOpt({value, isAdmin, onChange, children}) {
+// ── Universal Inline Edit ────────────────────────────────────────────
+// Wraps any text span; double-click (or pencil click) to edit
+function InlineEdit({value, onSave, style={}, className="", placeholder="...", dir="rtl", isSmall=false}) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef(null);
-
-  useEffect(()=>{ if(editing && inputRef.current) inputRef.current.focus(); },[editing]);
-
-  if(!isAdmin) return children;
+  const [draft, setDraft]     = useState(value);
+  const ref = useRef(null);
+  useEffect(()=>{if(editing&&ref.current){ref.current.focus();ref.current.select();}},[editing]);
 
   const commit = () => {
-    if(draft.trim() && draft !== value) onChange(draft.trim());
+    const v = draft.trim();
+    if(v && v !== value) onSave(v);
+    else setDraft(value);
     setEditing(false);
   };
 
-  return editing ? (
-    <span style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
+  if(editing) return (
+    <span style={{display:"inline-flex",alignItems:"center",gap:4,width:"100%"}} onClick={e=>e.stopPropagation()}>
       <input
-        ref={inputRef}
-        style={{flex:1,padding:"3px 8px",fontSize:13,border:"1.5px solid #2E73B8",borderRadius:6,fontFamily:"'Tajawal',sans-serif",direction:"rtl",outline:"none",background:"white"}}
+        ref={ref}
         value={draft}
         onChange={e=>setDraft(e.target.value)}
         onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraft(value);setEditing(false);}}}
-        onClick={e=>e.stopPropagation()}
+        style={{flex:1,padding:isSmall?"2px 7px":"5px 10px",fontSize:isSmall?11:13,border:"1.5px solid #2E73B8",
+          borderRadius:6,fontFamily:"'Tajawal',sans-serif",direction:dir,outline:"none",background:"white",minWidth:0}}
       />
-      <button onClick={e=>{e.stopPropagation();commit();}} style={{background:"#2DADA0",border:"none",borderRadius:5,color:"white",cursor:"pointer",padding:"2px 8px",fontSize:12,fontFamily:"'Tajawal',sans-serif"}}>✓</button>
-      <button onClick={e=>{e.stopPropagation();setDraft(value);setEditing(false);}} style={{background:"#E1E8F0",border:"none",borderRadius:5,color:"#6B7A8D",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button>
+      <button onClick={e=>{e.stopPropagation();commit();}}
+        style={{background:"#2DADA0",border:"none",borderRadius:5,color:"white",cursor:"pointer",padding:"2px 8px",fontSize:12,flexShrink:0}}>✓</button>
+      <button onClick={e=>{e.stopPropagation();setDraft(value);setEditing(false);}}
+        style={{background:"#E1E8F0",border:"none",borderRadius:5,color:"#6B7A8D",cursor:"pointer",padding:"2px 7px",fontSize:12,flexShrink:0}}>✕</button>
     </span>
-  ) : (
-    <span style={{display:"flex",alignItems:"center",gap:5,flex:1,minWidth:0}}>
-      {children}
-      <button
+  );
+
+  return (
+    <span
+      className={className}
+      style={{...style, cursor:"text", display:"inline-flex", alignItems:"center", gap:4}}
+      title="انقر للتعديل / Click to edit"
+    >
+      <span>{value || <em style={{opacity:.4}}>{placeholder}</em>}</span>
+      <span
         onClick={e=>{e.stopPropagation();setEditing(true);}}
-        title="تعديل / Edit"
-        style={{background:"none",border:"none",cursor:"pointer",color:"#B0BAC8",fontSize:12,padding:"1px 4px",borderRadius:4,lineHeight:1,flexShrink:0,transition:"color .15s"}}
-        onMouseEnter={e=>e.target.style.color="#2E73B8"}
-        onMouseLeave={e=>e.target.style.color="#B0BAC8"}
-      >✎</button>
+        style={{color:"#C8D0DA",fontSize:isSmall?10:12,lineHeight:1,cursor:"pointer",flexShrink:0,transition:"color .15s",userSelect:"none"}}
+        onMouseEnter={e=>e.currentTarget.style.color="#2E73B8"}
+        onMouseLeave={e=>e.currentTarget.style.color="#C8D0DA"}
+      >✎</span>
+    </span>
+  );
+}
+
+// ── Editable Option (inline dept/option rename, AR + EN) ─────────────
+function EditableOpt({arVal, enVal, isAdmin, onChangeAr, onChangeEn, children}) {
+  if(!isAdmin) return children;
+  return (
+    <span style={{display:"flex",flexDirection:"column",flex:1,gap:1,minWidth:0}}>
+      <InlineEdit value={arVal} onSave={onChangeAr} dir="rtl" />
+      {enVal !== undefined && (
+        <InlineEdit value={enVal||""} onSave={onChangeEn} dir="ltr"
+          style={{fontSize:11,color:"#8A97A8"}} isSmall={true} placeholder="English translation..." />
+      )}
     </span>
   );
 }
@@ -399,7 +421,7 @@ function BarChart({data, total, color}) {
 }
 
 // ── Question Input ────────────────────────────────────────────────────
-function QInput({q, value, onChange, isAdmin=false, onRenameOption}) {
+function QInput({q, value, onChange, isAdmin=false, onRenameOption, onRenameOptionEn, onEditQuestionText}) {
   if (q.type === "rating5") {
     return (
       <div className="rating-row">
@@ -417,20 +439,30 @@ function QInput({q, value, onChange, isAdmin=false, onRenameOption}) {
     return (
       <div className="radio-grp">
         {(q.options||[]).map((opt, i) => (
-          <div key={i} className={`radio-opt${value===opt?" sel":""}`} onClick={() => onChange(opt)}>
-            <div className={`rdot${value===opt?" sel":""}`}>{value===opt&&<div className="rdot-inner"/>}</div>
-            <EditableOpt
-              value={ar(opt)}
-              isAdmin={isAdmin && q.id==="q_dept"}
-              onChange={newName => onRenameOption && onRenameOption(i, newName)}
-            >
-              <span className="r-opt-text">
+          <div key={i} className={`radio-opt${value===opt?" sel":""}`} onClick={() => !isAdmin && onChange(opt)}>
+            <div className={`rdot${value===opt?" sel":""}`} onClick={()=>isAdmin?null:null}>{value===opt&&<div className="rdot-inner"/>}</div>
+            {isAdmin ? (
+              <EditableOpt
+                arVal={ar(opt)} enVal={en(opt)}
+                isAdmin={true}
+                onChangeAr={v => onRenameOption && onRenameOption(i, v)}
+                onChangeEn={v => onRenameOptionEn && onRenameOptionEn(i, v)}
+              ><span/></EditableOpt>
+            ) : (
+              <span className="r-opt-text" onClick={()=>onChange(opt)}>
                 {ar(opt)}
                 {en(opt) && <span className="en">{en(opt)}</span>}
               </span>
-            </EditableOpt>
+            )}
           </div>
         ))}
+        {isAdmin && (
+          <button
+            className="btn btn-ghost btn-xs"
+            style={{marginTop:6,alignSelf:"flex-start"}}
+            onClick={e=>{e.stopPropagation(); onRenameOption && onRenameOption("ADD","");}}
+          >+ إضافة خيار / Add option</button>
+        )}
       </div>
     );
   }
@@ -441,7 +473,7 @@ function QInput({q, value, onChange, isAdmin=false, onRenameOption}) {
 }
 
 // ── Survey Page ───────────────────────────────────────────────────────
-function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameOption}) {
+function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameOption, onEditQuestion, onEditSection}) {
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState({});
@@ -522,8 +554,14 @@ function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameO
           <div className="sec-div">
             <div className="sec-div-line"/>
             <div className="sec-div-text">
-              📌 {ar(sec)}
-              {en(sec) && <span className="en">{en(sec)}</span>}
+              📌 {isAdmin ? (
+                <span style={{display:"flex",flexDirection:"column",gap:2,alignItems:"center"}}>
+                  <InlineEdit value={ar(sec)} onSave={v=>onEditSection(sec,v,'ar')} dir="rtl" style={{fontWeight:700,fontSize:14,color:"#1B3F6E",textAlign:"center"}}/>
+                  <InlineEdit value={en(sec)||""} onSave={v=>onEditSection(sec,v,'en')} dir="ltr" style={{fontSize:10,color:"#6B7A8D",textAlign:"center"}} isSmall={true} placeholder="English section name..."/>
+                </span>
+              ) : (
+                <span>{ar(sec)}{en(sec) && <span className="en">{en(sec)}</span>}</span>
+              )}
             </div>
             <div className="sec-div-line"/>
           </div>
@@ -531,10 +569,26 @@ function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameO
             <div key={q.id} className="q-item" style={errors[q.id]?{border:"1.5px solid #E74C3C"}:{}}>
               <div className="q-text">
                 {q.required && <span className="req-star">*</span>}
-                {ar(q.text)}
-                {en(q.text) && <span className="en">{en(q.text)}</span>}
+                {isAdmin ? (
+                  <span style={{display:"flex",flexDirection:"column",gap:3}}>
+                    <InlineEdit value={ar(q.text)} onSave={v=>onEditQuestion(q.id,v,'ar')} dir="rtl"
+                      style={{fontWeight:600,fontSize:14,color:"#1A2332"}} />
+                    <InlineEdit value={en(q.text)||""} onSave={v=>onEditQuestion(q.id,v,'en')} dir="ltr"
+                      style={{fontSize:11,color:"#6B7A8D",fontWeight:400}} isSmall={true} placeholder="English question text..." />
+                  </span>
+                ) : (
+                  <span>
+                    {ar(q.text)}
+                    {en(q.text) && <span className="en">{en(q.text)}</span>}
+                  </span>
+                )}
               </div>
-              <QInput q={q} value={answers[q.id]} onChange={v=>setAnswer(q.id,v)} isAdmin={isAdmin} onRenameOption={(idx,name)=>onRenameOption(q.id,idx,name)}/>
+              <QInput q={q} value={answers[q.id]} onChange={v=>setAnswer(q.id,v)}
+                isAdmin={isAdmin}
+                onRenameOption={(idx,name)=>onRenameOption(q.id,idx,name,'ar')}
+                onRenameOptionEn={(idx,name)=>onRenameOption(q.id,idx,name,'en')}
+                onEditQuestionText={(ar,en)=>onEditQuestion(q.id,ar,en)}
+              />
               {errors[q.id] && (
                 <p style={{color:"#E74C3C",fontSize:11,marginTop:5}}>
                   هذا السؤال مطلوب / <em>This field is required</em>
@@ -1021,15 +1075,51 @@ function App() {
   const handleUnlock = () => { storageSet("asaas_auth",true); setUnlocked(true); };
   const handleLock = () => { storageSet("asaas_auth",false); setUnlocked(false); };
 
-  // Rename a dept option inline
-  const handleRenameOption = (qId, optIdx, newName) => {
+  // Rename / add option inline
+  const handleRenameOption = (qId, optIdx, newName, lang='ar') => {
     const updated = questions.map(q => {
       if(q.id !== qId) return q;
       const opts = [...q.options];
-      const old = opts[optIdx];
-      const engPart = old.includes("|") ? old.split("|").slice(1).join("|") : "";
-      opts[optIdx] = engPart ? `${newName}|${engPart}` : newName;
+      if(optIdx === "ADD") {
+        // Add a new blank option
+        opts.push("قسم جديد|New Department");
+        return {...q, options: opts};
+      }
+      const old = opts[optIdx] || "";
+      const arPart = old.split("|")[0] || "";
+      const enPart = old.split("|")[1] || "";
+      opts[optIdx] = lang === 'en'
+        ? `${arPart}|${newName}`
+        : `${newName}|${enPart}`;
       return {...q, options: opts};
+    });
+    saveQ(updated);
+  };
+
+  // Edit question text (AR or EN)
+  const handleEditQuestion = (qId, newVal, lang='ar') => {
+    const updated = questions.map(q => {
+      if(q.id !== qId) return q;
+      const arPart = q.text.split("|")[0] || "";
+      const enPart = q.text.split("|")[1] || "";
+      const newText = lang === 'en'
+        ? `${arPart}|${newVal}`
+        : `${newVal}|${enPart}`;
+      return {...q, text: newText};
+    });
+    saveQ(updated);
+  };
+
+  // Edit section name (AR or EN)
+  const handleEditSection = (secKey, newVal, lang='ar') => {
+    const updated = questions.map(q => {
+      if(q.section !== secKey) return q;
+      const arPart = q.section.split("|")[0] || "";
+      const enPart = q.section.split("|")[1] || "";
+      const newSec = lang === 'en'
+        ? `${arPart}|${newVal}`
+        : `${newVal}|${enPart}`;
+      return {...q, section: newSec};
     });
     saveQ(updated);
   };
@@ -1070,7 +1160,12 @@ function App() {
           </div>
         </nav>
 
-        {page==="survey"   && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={handleSubmit} isAdmin={true} onRenameOption={handleRenameOption}/>}
+        {page==="survey"   && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={handleSubmit}
+            isAdmin={true}
+            onRenameOption={handleRenameOption}
+            onEditQuestion={handleEditQuestion}
+            onEditSection={handleEditSection}
+          />}
         {page==="admin"    && <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleOn} onSaveQuestions={saveQ} onClearResponses={()=>{saveR([]);setAnalysisCache({});}}/>}
         {page==="analytics"&& <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache}/>}
         {page==="report"   && <ReportPage questions={questions} responses={responses}/>}
