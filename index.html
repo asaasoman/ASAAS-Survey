@@ -307,7 +307,57 @@ const GlobalStyle = () => (
 );
 
 
-// ── Password Gate ─────────────────────────────────────────────────────
+
+// ── Admin Gate (shown only when accessing admin pages without login) ──
+function AdminGate({onUnlock}) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState(false);
+  const [show, setShow] = useState(false);
+  const check = () => {
+    if(pw === CORRECT_PW){ onUnlock(); }
+    else { setErr(true); setPw(""); setTimeout(()=>setErr(false),2500); }
+  };
+  return (
+    <div className="page" style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh"}}>
+      <div style={{background:"white",borderRadius:16,border:"1px solid #E1E8F0",padding:"40px 36px",maxWidth:400,width:"100%",textAlign:"center",boxShadow:"0 4px 24px rgba(27,63,110,.08)"}}>
+        <div style={{width:64,height:64,background:"#EBF3FB",borderRadius:50,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:32}}>🔐</div>
+        <h2 style={{fontSize:19,fontWeight:800,color:"#1B3F6E",marginBottom:4}}>
+          دخول الإدارة
+          <span className="en" style={{textAlign:"center"}}>Admin Access Required</span>
+        </h2>
+        <p style={{fontSize:12,color:"#6B7A8D",marginBottom:20,lineHeight:1.6}}>
+          هذه الصفحة مخصصة للمسؤولين فقط.<br/>
+          <span style={{direction:"ltr",display:"block"}}>This page is restricted to admins only.</span>
+        </p>
+        <div style={{position:"relative",marginBottom:err?10:14}}>
+          <input
+            type={show?"text":"password"}
+            className="inp"
+            style={{textAlign:"center",fontSize:15,letterSpacing:show?1:4,paddingLeft:38,paddingRight:14}}
+            placeholder="••••••••••"
+            value={pw}
+            onChange={e=>{setPw(e.target.value);setErr(false);}}
+            onKeyDown={e=>e.key==="Enter"&&check()}
+            autoFocus
+          />
+          <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#6B7A8D",fontSize:16,padding:0,lineHeight:1}}>
+            {show?"🙈":"👁"}
+          </button>
+        </div>
+        {err && (
+          <div style={{background:"#FDECEA",color:"#8B1E1E",borderRadius:8,padding:"8px 12px",fontSize:12,marginBottom:12}}>
+            كلمة المرور غير صحيحة / Incorrect password
+          </div>
+        )}
+        <button className="btn btn-primary" style={{width:"100%",padding:"12px 0",fontSize:15}} onClick={check}>
+          دخول / Enter
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Password Gate (kept for reference, no longer used for full app) ─────
 function PasswordGate({onUnlock}) {
   const [pw, setPw] = useState("");
   const [err, setErr] = useState(false);
@@ -1362,7 +1412,7 @@ function App() {
     saveQ(updated);
   };
 
-  if(!unlocked) return <><GlobalStyle/><PasswordGate onUnlock={handleUnlock}/></>;
+  // No full-app gate — visitors access survey freely
 
   const NAV=[
     ["survey","الاستبيان","Survey","📋"],
@@ -1394,12 +1444,15 @@ function App() {
                 {ar_}<span className="en">{en_}</span>
               </button>
             ))}
-            <button className="nav-tab" onClick={handleLock} title="تسجيل خروج / Logout" style={{marginRight:4,opacity:.7,fontSize:16}}>🔓</button>
+            {unlocked
+              ? <button className="nav-tab" onClick={handleLock} title="تسجيل خروج / Logout" style={{marginRight:4,opacity:.7,fontSize:16,border:"1px solid rgba(255,255,255,.2)",borderRadius:6}}>🔓 <span style={{fontSize:9,display:"block",opacity:.7}}>خروج/Logout</span></button>
+              : <button className="nav-tab" onClick={()=>setPage("admin")} title="دخول الإدارة / Admin login" style={{marginRight:4,opacity:.5,fontSize:14}}>🔐 <span style={{fontSize:9,display:"block",opacity:.7}}>إدارة/Admin</span></button>
+            }
           </div>
         </nav>
 
         {page==="survey"   && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={handleSubmit}
-            isAdmin={true}
+            isAdmin={unlocked}
             onRenameOption={handleRenameOption}
             onEditQuestion={handleEditQuestion}
             onEditSection={handleEditSection}
@@ -1407,9 +1460,9 @@ function App() {
             onDeleteQuestion={handleDeleteQuestion}
             onAddQuestion={handleAddQuestion}
           />}
-        {page==="admin"    && <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleOn} onSaveQuestions={saveQ} onClearResponses={()=>{saveR([]);setAnalysisCache({});}}/>}
-        {page==="analytics"&& <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache}/>}
-        {page==="report"   && <ReportPage questions={questions} responses={responses}/>}
+        {page==="admin"    && (unlocked ? <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleOn} onSaveQuestions={saveQ} onClearResponses={()=>{saveR([]);setAnalysisCache({});}} /> : <AdminGate onUnlock={handleUnlock}/>)}
+        {page==="analytics"&& (unlocked ? <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache}/> : <AdminGate onUnlock={handleUnlock}/>)}
+        {page==="report"   && (unlocked ? <ReportPage questions={questions} responses={responses}/> : <AdminGate onUnlock={handleUnlock}/>)}
 
         <div className="fnav fl">
           {NAV.map(([id,ar_,en_,ic])=>(
