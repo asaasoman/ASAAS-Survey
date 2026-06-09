@@ -23,7 +23,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useCallback } = React;
+const { useState, useCallback, useRef, useEffect } = React;
 
 // ── Bilingual text helper ────────────────────────────────────────────
 const T = ({ ar, en, className="" }) => (
@@ -36,6 +36,9 @@ const T = ({ ar, en, className="" }) => (
 // ── Storage ──────────────────────────────────────────────────────────
 function storageGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;}}
 function storageSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch{return false;}}
+
+// ── Password ─────────────────────────────────────────────────────────
+const CORRECT_PW = "asaas_oman";
 
 // ── Brand colours ────────────────────────────────────────────────────
 const C = {navy:"#1B3F6E",blue:"#2E73B8",teal:"#2DADA0",green:"#4A9B3C",warn:"#F39C12",danger:"#E74C3C",muted:"#6B7A8D",bg:"#F5F7FA",border:"#E1E8F0"};
@@ -284,6 +287,94 @@ const GlobalStyle = () => (
   `}</style>
 );
 
+
+// ── Password Gate ─────────────────────────────────────────────────────
+function PasswordGate({onUnlock}) {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState(false);
+  const [show, setShow] = useState(false);
+  const check = () => {
+    if(pw === CORRECT_PW){ onUnlock(); }
+    else { setErr(true); setTimeout(()=>setErr(false),2000); }
+  };
+  return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#F5F7FA"}}>
+      <div style={{background:"white",borderRadius:16,border:"1px solid #E1E8F0",padding:"40px 36px",maxWidth:400,width:"90%",textAlign:"center",boxShadow:"0 4px 24px rgba(27,63,110,.08)"}}>
+        <div style={{width:64,height:64,background:"#EBF3FB",borderRadius:50,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 20px",fontSize:32}}>🔐</div>
+        <h2 style={{fontSize:20,fontWeight:800,color:"#1B3F6E",marginBottom:4}}>
+          أدخل كلمة المرور
+        </h2>
+        <p style={{fontSize:12,color:"#6B7A8D",marginBottom:20,direction:"ltr"}}>Enter password to access the survey</p>
+        <div style={{position:"relative",marginBottom:14}}>
+          <input
+            type={show?"text":"password"}
+            className="inp"
+            style={{textAlign:"center",fontSize:15,letterSpacing:show?1:4,paddingLeft:38}}
+            placeholder="••••••••••"
+            value={pw}
+            onChange={e=>{setPw(e.target.value);setErr(false);}}
+            onKeyDown={e=>e.key==="Enter"&&check()}
+            autoFocus
+          />
+          <button onClick={()=>setShow(s=>!s)} style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#6B7A8D",fontSize:16,padding:0,lineHeight:1}}>
+            {show?"🙈":"👁"}
+          </button>
+        </div>
+        {err && (
+          <div style={{background:"#FDECEA",color:"#8B1E1E",borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:14}}>
+            كلمة المرور غير صحيحة / Incorrect password
+          </div>
+        )}
+        <button className="btn btn-primary" style={{width:"100%",padding:"12px 0",fontSize:15}} onClick={check}>
+          دخول / Enter
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Editable Option (inline dept rename) ─────────────────────────────
+function EditableOpt({value, isAdmin, onChange, children}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef(null);
+
+  useEffect(()=>{ if(editing && inputRef.current) inputRef.current.focus(); },[editing]);
+
+  if(!isAdmin) return children;
+
+  const commit = () => {
+    if(draft.trim() && draft !== value) onChange(draft.trim());
+    setEditing(false);
+  };
+
+  return editing ? (
+    <span style={{display:"flex",alignItems:"center",gap:6,flex:1}}>
+      <input
+        ref={inputRef}
+        style={{flex:1,padding:"3px 8px",fontSize:13,border:"1.5px solid #2E73B8",borderRadius:6,fontFamily:"'Tajawal',sans-serif",direction:"rtl",outline:"none",background:"white"}}
+        value={draft}
+        onChange={e=>setDraft(e.target.value)}
+        onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape"){setDraft(value);setEditing(false);}}}
+        onClick={e=>e.stopPropagation()}
+      />
+      <button onClick={e=>{e.stopPropagation();commit();}} style={{background:"#2DADA0",border:"none",borderRadius:5,color:"white",cursor:"pointer",padding:"2px 8px",fontSize:12,fontFamily:"'Tajawal',sans-serif"}}>✓</button>
+      <button onClick={e=>{e.stopPropagation();setDraft(value);setEditing(false);}} style={{background:"#E1E8F0",border:"none",borderRadius:5,color:"#6B7A8D",cursor:"pointer",padding:"2px 8px",fontSize:12}}>✕</button>
+    </span>
+  ) : (
+    <span style={{display:"flex",alignItems:"center",gap:5,flex:1,minWidth:0}}>
+      {children}
+      <button
+        onClick={e=>{e.stopPropagation();setEditing(true);}}
+        title="تعديل / Edit"
+        style={{background:"none",border:"none",cursor:"pointer",color:"#B0BAC8",fontSize:12,padding:"1px 4px",borderRadius:4,lineHeight:1,flexShrink:0,transition:"color .15s"}}
+        onMouseEnter={e=>e.target.style.color="#2E73B8"}
+        onMouseLeave={e=>e.target.style.color="#B0BAC8"}
+      >✎</button>
+    </span>
+  );
+}
+
 // ── Bar Chart ─────────────────────────────────────────────────────────
 function BarChart({data, total, color}) {
   const max = Math.max(...data.map(d => d.count), 1);
@@ -308,7 +399,7 @@ function BarChart({data, total, color}) {
 }
 
 // ── Question Input ────────────────────────────────────────────────────
-function QInput({q, value, onChange}) {
+function QInput({q, value, onChange, isAdmin=false, onRenameOption}) {
   if (q.type === "rating5") {
     return (
       <div className="rating-row">
@@ -328,10 +419,16 @@ function QInput({q, value, onChange}) {
         {(q.options||[]).map((opt, i) => (
           <div key={i} className={`radio-opt${value===opt?" sel":""}`} onClick={() => onChange(opt)}>
             <div className={`rdot${value===opt?" sel":""}`}>{value===opt&&<div className="rdot-inner"/>}</div>
-            <span className="r-opt-text">
-              {ar(opt)}
-              {en(opt) && <span className="en">{en(opt)}</span>}
-            </span>
+            <EditableOpt
+              value={ar(opt)}
+              isAdmin={isAdmin && q.id==="q_dept"}
+              onChange={newName => onRenameOption && onRenameOption(i, newName)}
+            >
+              <span className="r-opt-text">
+                {ar(opt)}
+                {en(opt) && <span className="en">{en(opt)}</span>}
+              </span>
+            </EditableOpt>
           </div>
         ))}
       </div>
@@ -344,7 +441,7 @@ function QInput({q, value, onChange}) {
 }
 
 // ── Survey Page ───────────────────────────────────────────────────────
-function SurveyPage({questions, surveyActive, onSubmit}) {
+function SurveyPage({questions, surveyActive, onSubmit, isAdmin=false, onRenameOption}) {
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [errors, setErrors] = useState({});
@@ -414,6 +511,12 @@ function SurveyPage({questions, surveyActive, onSubmit}) {
         🔒 جميع إجاباتكم ستُعامَل بسرية تامة — المدة المتوقعة: 10-15 دقيقة
         <span className="en">All responses will be treated with complete confidentiality — Estimated time: 10–15 minutes</span>
       </div>
+      {isAdmin && (
+        <div className="alert" style={{background:"#FFF8E6",border:"1px solid #FAC775",color:"#7D4A00",marginBottom:14}}>
+          ✎ وضع الإدارة: انقر على أيقونة القلم بجانب أي قسم لتعديل اسمه مباشرةً
+          <span className="en">Admin mode: click the ✎ pencil icon next to any department name to rename it inline</span>
+        </div>
+      )}
       {sections.map(sec => (
         <div key={sec}>
           <div className="sec-div">
@@ -431,7 +534,7 @@ function SurveyPage({questions, surveyActive, onSubmit}) {
                 {ar(q.text)}
                 {en(q.text) && <span className="en">{en(q.text)}</span>}
               </div>
-              <QInput q={q} value={answers[q.id]} onChange={v=>setAnswer(q.id,v)}/>
+              <QInput q={q} value={answers[q.id]} onChange={v=>setAnswer(q.id,v)} isAdmin={isAdmin} onRenameOption={(idx,name)=>onRenameOption(q.id,idx,name)}/>
               {errors[q.id] && (
                 <p style={{color:"#E74C3C",fontSize:11,marginTop:5}}>
                   هذا السؤال مطلوب / <em>This field is required</em>
@@ -903,6 +1006,7 @@ function ReportPage({questions, responses}) {
 
 // ── Root App ──────────────────────────────────────────────────────────
 function App() {
+  const [unlocked, setUnlocked] = useState(()=>storageGet("asaas_auth")===true);
   const [page, setPage] = useState("survey");
   const [questions, setQuestions] = useState(()=>storageGet("asaas_q")||INITIAL_QUESTIONS);
   const [responses, setResponses] = useState(()=>storageGet("asaas_r")||[]);
@@ -913,6 +1017,24 @@ function App() {
   const saveR = rs=>{setResponses(rs);storageSet("asaas_r",rs);};
   const toggleOn = v=>{setSurveyActive(v);storageSet("asaas_on",v);};
   const handleSubmit = a=>{saveR([...responses,{...a,id:Date.now(),submittedAt:new Date().toISOString()}]);};
+
+  const handleUnlock = () => { storageSet("asaas_auth",true); setUnlocked(true); };
+  const handleLock = () => { storageSet("asaas_auth",false); setUnlocked(false); };
+
+  // Rename a dept option inline
+  const handleRenameOption = (qId, optIdx, newName) => {
+    const updated = questions.map(q => {
+      if(q.id !== qId) return q;
+      const opts = [...q.options];
+      const old = opts[optIdx];
+      const engPart = old.includes("|") ? old.split("|").slice(1).join("|") : "";
+      opts[optIdx] = engPart ? `${newName}|${engPart}` : newName;
+      return {...q, options: opts};
+    });
+    saveQ(updated);
+  };
+
+  if(!unlocked) return <><GlobalStyle/><PasswordGate onUnlock={handleUnlock}/></>;
 
   const NAV=[
     ["survey","الاستبيان","Survey","📋"],
@@ -944,10 +1066,11 @@ function App() {
                 {ar_}<span className="en">{en_}</span>
               </button>
             ))}
+            <button className="nav-tab" onClick={handleLock} title="تسجيل خروج / Logout" style={{marginRight:4,opacity:.7,fontSize:16}}>🔓</button>
           </div>
         </nav>
 
-        {page==="survey"   && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={handleSubmit}/>}
+        {page==="survey"   && <SurveyPage questions={questions} surveyActive={surveyActive} onSubmit={handleSubmit} isAdmin={true} onRenameOption={handleRenameOption}/>}
         {page==="admin"    && <AdminPage questions={questions} responses={responses} surveyActive={surveyActive} onToggleActive={toggleOn} onSaveQuestions={saveQ} onClearResponses={()=>{saveR([]);setAnalysisCache({});}}/>}
         {page==="analytics"&& <AnalyticsPage questions={questions} responses={responses} analysisCache={analysisCache} setAnalysisCache={setAnalysisCache}/>}
         {page==="report"   && <ReportPage questions={questions} responses={responses}/>}
