@@ -115,8 +115,7 @@ async function gistWrite(data){
 let _cache = null;
 
 async function storageGet(k){
-  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token"||
-     ) return lsGet(k);
+  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return lsGet(k);
   if(!_cache){
     const remote = await gistRead();
     if(remote && typeof remote === "object"){
@@ -135,8 +134,7 @@ async function storageGet(k){
 
 async function storageSet(k, v){
   lsSet(k, v);
-  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token"||
-     ) return true;
+  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return true;
   const {token} = getCfg();
   if(!token){ console.log("storageSet: no token, local-only for key:", k); return true; }
   if(!_cache) _cache = (await gistRead()) || {};
