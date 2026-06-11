@@ -52,105 +52,100 @@ const T = ({ ar, en, className="" }) => (
   </span>
 );
 
-// ── Storage: GitHub Gist (shared across all browsers) ────────────────
-//
-// HOW TO SET UP (one-time, 2 minutes):
-// 1. Go to https://gist.github.com
-// 2. Create a new SECRET gist, filename: asaas-data.json, content: {}
-// 3. Copy the Gist ID from the URL (the long hash after your username)
-// 4. Go to https://github.com/settings/tokens → Generate new token (classic)
-//    → check only "gist" scope → copy the token
-// 5. On the survey page, click ⚙ Setup in the nav (visible when logged in)
-//    and paste both values — they'll be saved locally and used for sync.
-//
-// After setup: ALL browsers read/write the same Gist → always in sync.
+// ── Storage: GitHub Gist (shared cloud DB) ──────────────────────────
+// Gist ID is hardcoded — all browsers read it automatically.
+// Only admin (with token) can write changes back.
+
+const DEFAULT_GIST_ID = "fdad02e578086b113b861d208e310cc5";
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v!==null?JSON.parse(v):null;}catch{return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 
-// Default Gist ID — shared across all browsers automatically
-const DEFAULT_GIST_ID = "fdad02e578086b113b861d208e310cc5";
-
-function getGistConfig(){
+function getCfg(){
   return {
-    id:    lsGet("asaas_gist_id") || DEFAULT_GIST_ID,
+    id:    lsGet("asaas_gist_id")  || DEFAULT_GIST_ID,
     token: lsGet("asaas_gist_token") || ""
   };
 }
 
-// Read entire data object from Gist
+// Read from Gist — no token needed for reading (secret gists are readable by ID)
 async function gistRead(){
-  const {id,token} = getGistConfig();
+  const {id, token} = getCfg();
   if(!id) return null;
   try{
-    const headers = {"Accept":"application/vnd.github+json","Cache-Control":"no-cache"};
-    if(token) headers["Authorization"]=`Bearer ${token}`;
-    const r = await fetch(`https://api.github.com/gists/${id}?t=${Date.now()}`,{headers});
-    if(!r.ok){ console.warn("Gist read failed:",r.status); return null; }
+    const headers = {
+      "Accept": "application/vnd.github+json",
+      "Cache-Control": "no-cache, no-store"
+    };
+    if(token) headers["Authorization"] = `Bearer ${token}`;
+    const url = `https://api.github.com/gists/${id}`;
+    const r = await fetch(url, {headers, cache:"no-store"});
+    if(!r.ok){ console.warn("gistRead HTTP error:", r.status, await r.text()); return null; }
     const j = await r.json();
-    const content = j.files?.["asaas-data.json"]?.content;
-    if(!content){ console.warn("Gist file empty or missing"); return {}; }
-    return JSON.parse(content);
-  }catch(e){ console.warn("Gist read error:",e); return null; }
+    const raw = j.files?.["asaas-data.json"]?.content;
+    if(!raw){ console.warn("gistRead: file not found in gist"); return {}; }
+    const parsed = JSON.parse(raw);
+    console.log("gistRead OK, keys:", Object.keys(parsed));
+    return parsed;
+  }catch(e){ console.warn("gistRead error:", e); return null; }
 }
 
-// Write entire data object to Gist — returns true/false
+// Write to Gist — requires token (admin only)
 async function gistWrite(data){
-  const {id,token} = getGistConfig();
-  if(!id||!token){ console.warn("gistWrite: no id or token"); return false; }
+  const {id, token} = getCfg();
+  if(!id || !token){ console.warn("gistWrite: missing id or token"); return false; }
   try{
-    const body = JSON.stringify({files:{"asaas-data.json":{content:JSON.stringify(data,null,2)}}});
-    const r = await fetch(`https://api.github.com/gists/${id}`,{
-      method:"PATCH",
-      headers:{"Accept":"application/vnd.github+json","Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
-      body
+    const r = await fetch(`https://api.github.com/gists/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        files: { "asaas-data.json": { content: JSON.stringify(data, null, 2) } }
+      })
     });
-    if(!r.ok){ const t=await r.text(); console.warn("Gist write failed:",r.status,t); return false; }
+    if(!r.ok){ console.warn("gistWrite failed:", r.status, await r.text()); return false; }
+    console.log("gistWrite OK");
     return true;
-  }catch(e){ console.warn("Gist write error:",e); return false; }
+  }catch(e){ console.warn("gistWrite error:", e); return false; }
 }
 
-// In-memory cache of the full remote data object
-let _remoteCache = null;
-let _pendingWrite = false;
+let _cache = null;
 
-// storageGet: always read fresh from Gist on first call per session
 async function storageGet(k){
-  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return lsGet(k);
-  if(!_remoteCache){
+  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token"||
+     ) return lsGet(k);
+  if(!_cache){
     const remote = await gistRead();
-    _remoteCache = remote || {};
-    // If Gist is empty, push local data up (first-time admin setup)
-    const {token} = getGistConfig();
-    if(token && Object.keys(_remoteCache).length===0){
-      const localQ = lsGet("asaas_q");
-      const localR = lsGet("asaas_r");
-      const localOn= lsGet("asaas_on");
-      if(localQ) _remoteCache.asaas_q = localQ;
-      if(localR) _remoteCache.asaas_r = localR;
-      if(localOn!==null) _remoteCache.asaas_on = localOn;
-      if(Object.keys(_remoteCache).length>0) gistWrite(_remoteCache);
+    if(remote && typeof remote === "object"){
+      _cache = remote;
+      // Cache locally for offline fallback
+      if(remote.asaas_q) lsSet("asaas_q", remote.asaas_q);
+      if(remote.asaas_r) lsSet("asaas_r", remote.asaas_r);
+      if(remote.asaas_on !== undefined) lsSet("asaas_on", remote.asaas_on);
+    } else {
+      _cache = {};
     }
   }
-  if(k in _remoteCache) return _remoteCache[k];
-  return lsGet(k);
+  if(k in _cache) return _cache[k];
+  return lsGet(k); // fallback to local
 }
 
-// storageSet: update cache + local + write to Gist (admin only)
 async function storageSet(k, v){
   lsSet(k, v);
-  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return true;
-  const {token} = getGistConfig();
-  if(!token) return true; // visitor: no token — skip remote write
-  if(!_remoteCache) _remoteCache = (await gistRead()) || {};
-  _remoteCache[k] = v;
-  const ok = await gistWrite(_remoteCache);
-  if(!ok) console.warn("storageSet: gistWrite failed for key:",k);
+  if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token"||
+     ) return true;
+  const {token} = getCfg();
+  if(!token){ console.log("storageSet: no token, local-only for key:", k); return true; }
+  if(!_cache) _cache = (await gistRead()) || {};
+  _cache[k] = v;
+  const ok = await gistWrite(_cache);
   return ok;
 }
 
-// Force re-read from Gist on next access
-function invalidateCache(){ _remoteCache = null; }
+function invalidateCache(){ _cache = null; }
 
 // ── Storage: END ──────────────────────────────────────────────────────
 
@@ -161,101 +156,7 @@ const CORRECT_PW = "asaas_oman";
 const C = {navy:"#1B3F6E",blue:"#2E73B8",teal:"#2DADA0",green:"#4A9B3C",warn:"#F39C12",danger:"#E74C3C",muted:"#6B7A8D",bg:"#F5F7FA",border:"#E1E8F0"};
 
 // ── Survey questions (Arabic text + English translation) ─────────────
-const INITIAL_QUESTIONS = [
-  {id:"q_dept", section:"البيانات العامة|General Information", type:"radio", required:false,
-   text:"القسم أو الإدارة|Department / Division",
-   options:["العمليات|Operations","التقنية|Technology","المالية|Finance","الموارد البشرية|Human Resources","أخرى|Other"]},
-  {id:"q_exp", section:"البيانات العامة|General Information", type:"radio", required:false,
-   text:"سنوات الخبرة في الشركة|Years of experience at the company",
-   options:["أقل من سنة|Less than 1 year","١-٣ سنوات|1–3 years","٤-٦ سنوات|4–6 years","٧-١٠ سنوات|7–10 years","أكثر من ١٠ سنوات|More than 10 years"]},
-  {id:"q3", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"rating5", required:true,
-   text:"أنا راضٍ عن مسيرتي الوظيفية الحالية في الشركة.|I am satisfied with my current career path at the company.",
-   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
-  {id:"q4", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"rating5", required:true,
-   text:"أرى مساراً وظيفياً واضحاً أمامي داخل الشركة.|I can see a clear career path ahead of me within the company.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q5", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"rating5", required:true,
-   text:"آلية الترقية في الشركة شفافة وعادلة.|The promotion process at the company is transparent and fair.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q6", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
-   text:"كم مضى على آخر مراجعة لمسماك الوظيفي؟|How long ago was your last job title review?",
-   options:["أقل من سنة|Less than 1 year","١-٣ سنوات|1–3 years","٤-٧ سنوات|4–7 years","أكثر من ٧ سنوات|More than 7 years","لم يُراجَع قط|Never reviewed"]},
-  {id:"q7", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"yesno", required:true,
-   text:"هل تعتقد أن مسماك الوظيفي الحالي يعكس مؤهلاتك وخبراتك الفعلية؟|Do you believe your current job title reflects your actual qualifications and experience?",
-   options:["نعم|Yes","لا|No","لا أعرف|Not Sure"]},
-  {id:"q8", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
-   text:"ما مدى أهمية مراجعة المسميات الوظيفية دورياً في رأيك؟|How important is periodic job title review in your opinion?",
-   options:["غير مهم|Not important","مهم نوعاً ما|Somewhat important","مهم|Important","مهم جداً|Very important","أولوية قصوى|Top priority"]},
-  {id:"q9", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
-   text:"ما التوقع الزمني المنطقي بين الترقيات المتتالية في رأيك؟|What is a reasonable time expectation between consecutive promotions?",
-   options:["سنة واحدة|1 year","٢-٣ سنوات|2–3 years","٣-٤ سنوات|3–4 years","٤-٥ سنوات|4–5 years","حسب الأداء فقط|Performance-based only"]},
-  {id:"q10", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"radio", required:true,
-   text:"ما الذي تراه أكثر تأثيراً في قرارات الترقية؟|What do you consider most influential in promotion decisions?",
-   options:["الأداء والإنتاجية|Performance & productivity","سنوات الخبرة|Years of experience","المؤهلات والشهادات|Qualifications & certificates","التوصيات الإدارية|Management recommendations","الفرص المتاحة|Available opportunities"]},
-  {id:"q11", section:"المسار الوظيفي والترقيات|Career Path & Promotions", type:"open", required:false,
-   text:"ما اقتراحاتك لتحسين مسار الترقيات والتطور الوظيفي؟|What are your suggestions for improving the promotion and career development path?"},
-  {id:"q12", section:"التدريب والتطوير المهني|Training & Professional Development", type:"rating5", required:true,
-   text:"الشركة توفر فرص تدريب وتطوير كافية تلبي احتياجاتي المهنية.|The company provides sufficient training and development opportunities that meet my professional needs.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q13", section:"التدريب والتطوير المهني|Training & Professional Development", type:"yesno", required:true,
-   text:"هل تلقيت دعماً من الشركة لحضور دورات تدريبية أو الحصول على شهادات مهنية خارجية؟|Have you received company support to attend external training courses or obtain professional certifications?",
-   options:["نعم|Yes","لا|No","لا أعرف|Not Sure"]},
-  {id:"q14", section:"التدريب والتطوير المهني|Training & Professional Development", type:"radio", required:true,
-   text:"مقارنةً بالشركات الأخرى في القطاع، كيف تقيّم مستوى الدعم التدريبي في أساس؟|Compared to other companies in the sector, how do you rate ASAAS's training support?",
-   options:["أقل بكثير|Much less","أقل قليلاً|Slightly less","مماثل|Similar","أفضل قليلاً|Slightly better","أفضل بكثير|Much better"]},
-  {id:"q17", section:"التدريب والتطوير المهني|Training & Professional Development", type:"open", required:false,
-   text:"ما القطاعات أو المجالات التي تودّ أن تطوّر فيها مهاراتك؟|What sectors or fields would you like to develop your skills in?"},
-  {id:"q18", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"rating5", required:true,
-   text:"تتواصل الإدارة العليا مع الموظفين بشفافية وانتظام.|Senior management communicates with employees transparently and regularly.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q19", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"rating5", required:true,
-   text:"أشعر أن آرائي واقتراحاتي تُؤخذ بجدية من قِبَل الإدارة.|I feel that my opinions and suggestions are taken seriously by management.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q20", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"rating5", required:true,
-   text:"أتلقى معلومات كافية عن التوجه الاستراتيجي للشركة ومستقبلها.|I receive sufficient information about the company's strategic direction and future.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q23", section:"التواصل والشفافية المؤسسية|Communication & Transparency", type:"open", required:false,
-   text:"ما أكبر فجوة في التواصل تلاحظها بين الموظفين والإدارة؟|What is the biggest communication gap you notice between employees and management?"},
-  {id:"q24", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"rating5", required:true,
-   text:"أفهم التوجه الاستراتيجي لشركة أساس في المرحلة الراهنة بوضوح.|I clearly understand ASAAS's current strategic direction.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q25", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"rating5", required:true,
-   text:"أشعر بالاطمئنان على مستقبلي الوظيفي في الشركة.|I feel confident about my career future at the company.",
-   labels:["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},
-  {id:"q26", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"radio", required:true,
-   text:"التغييرات والتطورات المؤسسية الأخيرة أثّرت على روحي المعنوية بشكل:|Recent organizational changes affected my morale in a:",
-   options:["سلبي جداً|Very negatively","سلبي نوعاً ما|Somewhat negatively","محايد|Neutral","إيجابي نوعاً ما|Somewhat positively","إيجابي جداً|Very positively"]},
-  {id:"q27", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"radio", required:true,
-   text:"المعلومات التي تلقيتها عن مستقبل الشركة بعد الانتقال إلى مجموعة عمران كانت:|Information I received about the company's future after joining Omran Group was:",
-   options:["غير كافية على الإطلاق|Not sufficient at all","غير كافية|Insufficient","كافية نوعاً ما|Somewhat sufficient","كافية|Sufficient","وافية جداً|Very comprehensive"]},
-  {id:"q28", section:"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging", type:"open", required:false,
-   text:"ما المعلومات أو القرارات التي تودّ أن تكون أكثر وضوحاً بالنسبة لك؟|What information or decisions would you like to be clearer to you?"},
-  {id:"q29", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"rating5", required:true,
-   text:"أشعر أن جهودي ومساهماتي تُقدَّر بشكل مناسب من قِبَل الشركة.|I feel that my efforts and contributions are appropriately recognized by the company.",
-   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
-  {id:"q30", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"rating5", required:true,
-   text:"مزايا الموظفين الحالية (صحة، إجازات، مكافآت...) تلبي توقعاتي.|Current employee benefits (health, leave, bonuses…) meet my expectations.",
-   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
-  {id:"q31", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"yesno", required:true,
-   text:"هل تعتقد أنه يجب أن يحظى الموظفون بمزايا من مشاريع الشركة (فنادق، طيران، إلخ)؟|Do you believe employees should receive benefits from company projects (hotels, flights, etc.)?",
-   options:["نعم|Yes","لا|No","لا أعرف|Not Sure"]},
-  {id:"q33", section:"المزايا والتقدير الوظيفي|Benefits & Recognition", type:"open", required:false,
-   text:"اقتراحات محددة لتحسين منظومة المزايا والتقدير:|Specific suggestions to improve the benefits and recognition system:"},
-  {id:"q34", section:"الرضا العام|Overall Satisfaction", type:"rating5", required:true,
-   text:"بشكل عام، مدى رضاك عن بيئة العمل في أساس:|Overall, how satisfied are you with the work environment at ASAAS?",
-   labels:["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},
-  {id:"q35", section:"الرضا العام|Overall Satisfaction", type:"radio", required:true,
-   text:"ما احتمالية توصيتك لأحد المقربين بالعمل في شركة أساس؟|How likely are you to recommend ASAAS as a place to work to someone close to you?",
-   options:["١-٢ (غير محتمل)|1–2 (Unlikely)","٣-٤|3–4","٥-٦|5–6","٧-٨|7–8","٩-١٠ (محتمل جداً)|9–10 (Very likely)"]},
-  {id:"q36", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
-   text:"ما الشيء الواحد الذي لو تغيّر سيحسن تجربتك في العمل بشكل كبير؟|What is the one thing that, if changed, would significantly improve your work experience?"},
-  {id:"q37", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
-   text:"ما التحدي الذي تشعر أن الإدارة لا تقدّره بما يكفي في الوقت الحالي؟|What challenge do you feel management currently undervalues?"},
-  {id:"q38", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
-   text:"ما المهارات أو السمات التي تراها ضرورية للقادة في أساس؟|What skills or traits do you consider essential for leaders at ASAAS?"},
-  {id:"q39", section:"الرضا العام|Overall Satisfaction", type:"open", required:false,
-   text:"أي تعليق أو مقترح تودّ مشاركته مع الإدارة:|Any comment or suggestion you would like to share with management:"},
-];
+const INITIAL_QUESTIONS = [{"id":"q_dept","section":"البيانات العامة|General Information","type":"radio","required":false,"text":"القسم أو الإدارة|Department / Division","options":["العمليات|Operations","التقنية|Technology","المالية|Finance","الموارد البشرية|Human Resources","التسويق|Other"]},{"id":"q_exp","section":"البيانات العامة|General Information","type":"radio","required":false,"text":"سنوات الخبرة في الشركة|Years of experience at the company","options":["أقل من سنة|Less than 1 year","١-٣ سنوات|1–3 years","٤-٦ سنوات|4–6 years","٧-١٠ سنوات|7–10 years","أكثر من ١٠ سنوات|More than 10 years"]},{"id":"q3","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"rating5","required":true,"text":"أنا راضٍ عن مسيرتي الوظيفية الحالية في الشركة.|I am satisfied with my current career path at the company.","labels":["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},{"id":"q4","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"rating5","required":true,"text":"أرى مساراً وظيفياً واضحاً أمامي داخل الشركة.|I can see a clear career path ahead of me within the company.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q5","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"rating5","required":true,"text":"آلية الترقية في الشركة شفافة وعادلة.|The promotion process at the company is transparent and fair.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q6","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"radio","required":true,"text":"كم مضى على آخر مراجعة لمسماك الوظيفي؟|How long ago was your last job title review?","options":["أقل من سنة|Less than 1 year","١-٣ سنوات|1–3 years","٤-٧ سنوات|4–7 years","أكثر من ٧ سنوات|More than 7 years","لم يُراجَع قط|Never reviewed"]},{"id":"q7","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"yesno","required":true,"text":"هل تعتقد أن مسماك الوظيفي الحالي يعكس مؤهلاتك وخبراتك الفعلية؟|Do you believe your current job title reflects your actual qualifications and experience?","options":["نعم|Yes","لا|No","لا أعرف|Not Sure"]},{"id":"q8","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"radio","required":true,"text":"ما مدى أهمية مراجعة المسميات الوظيفية دورياً في رأيك؟|How important is periodic job title review in your opinion?","options":["غير مهم|Not important","مهم نوعاً ما|Somewhat important","مهم|Important","مهم جداً|Very important","أولوية قصوى|Top priority"]},{"id":"q9","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"radio","required":true,"text":"ما التوقع الزمني المنطقي بين الترقيات المتتالية في رأيك؟|What is a reasonable time expectation between consecutive promotions?","options":["سنة واحدة|1 year","٢-٣ سنوات|2–3 years","٣-٤ سنوات|3–4 years","٤-٥ سنوات|4–5 years","حسب الأداء فقط|Performance-based only"]},{"id":"q10","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"radio","required":true,"text":"ما الذي تراه أكثر تأثيراً في قرارات الترقية؟|What do you consider most influential in promotion decisions?","options":["الأداء والإنتاجية|Performance & productivity","سنوات الخبرة|Years of experience","المؤهلات والشهادات|Qualifications & certificates","التوصيات الإدارية|Management recommendations","الفرص المتاحة|Available opportunities"]},{"id":"q11","section":"المسار الوظيفي والترقيات|Career Path & Promotions","type":"open","required":false,"text":"ما اقتراحاتك لتحسين مسار الترقيات والتطور الوظيفي؟|What are your suggestions for improving the promotion and career development path?"},{"id":"q12","section":"التدريب والتطوير المهني|Training & Professional Development","type":"rating5","required":true,"text":"الشركة توفر فرص تدريب وتطوير كافية تلبي احتياجاتي المهنية.|The company provides sufficient training and development opportunities that meet my professional needs.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q13","section":"التدريب والتطوير المهني|Training & Professional Development","type":"yesno","required":true,"text":"هل تلقيت دعماً من الشركة لحضور دورات تدريبية أو الحصول على شهادات مهنية خارجية؟|Have you received company support to attend external training courses or obtain professional certifications?","options":["نعم|Yes","لا|No","لا أعرف|Not Sure"]},{"id":"q14","section":"التدريب والتطوير المهني|Training & Professional Development","type":"radio","required":true,"text":"مقارنةً بالشركات الأخرى في القطاع، كيف تقيّم مستوى الدعم التدريبي في أساس؟|Compared to other companies in the sector, how do you rate ASAAS's training support?","options":["أقل بكثير|Much less","أقل قليلاً|Slightly less","مماثل|Similar","أفضل قليلاً|Slightly better","أفضل بكثير|Much better"]},{"id":"q17","section":"التدريب والتطوير المهني|Training & Professional Development","type":"open","required":false,"text":"ما القطاعات أو المجالات التي تودّ أن تطوّر فيها مهاراتك؟|What sectors or fields would you like to develop your skills in?"},{"id":"q18","section":"التواصل والشفافية المؤسسية|Communication & Transparency","type":"rating5","required":true,"text":"تتواصل الإدارة العليا مع الموظفين بشفافية وانتظام.|Senior management communicates with employees transparently and regularly.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q19","section":"التواصل والشفافية المؤسسية|Communication & Transparency","type":"rating5","required":true,"text":"أشعر أن آرائي واقتراحاتي تُؤخذ بجدية من قِبَل الإدارة.|I feel that my opinions and suggestions are taken seriously by management.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q20","section":"التواصل والشفافية المؤسسية|Communication & Transparency","type":"rating5","required":true,"text":"أتلقى معلومات كافية عن التوجه الاستراتيجي للشركة ومستقبلها.|I receive sufficient information about the company's strategic direction and future.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q23","section":"التواصل والشفافية المؤسسية|Communication & Transparency","type":"open","required":false,"text":"ما أكبر فجوة في التواصل تلاحظها بين الموظفين والإدارة؟|What is the biggest communication gap you notice between employees and management?"},{"id":"q24","section":"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging","type":"rating5","required":true,"text":"أفهم التوجه الاستراتيجي لشركة أساس في المرحلة الراهنة بوضوح.|I clearly understand ASAAS's current strategic direction.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q25","section":"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging","type":"rating5","required":true,"text":"أشعر بالاطمئنان على مستقبلي الوظيفي في الشركة.|I feel confident about my career future at the company.","labels":["لا أوافق بشدة|Strongly Disagree","لا أوافق|Disagree","محايد|Neutral","أوافق|Agree","أوافق بشدة|Strongly Agree"]},{"id":"q26","section":"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging","type":"radio","required":true,"text":"التغييرات والتطورات المؤسسية الأخيرة أثّرت على روحي المعنوية بشكل:|Recent organizational changes affected my morale in a:","options":["سلبي جداً|Very negatively","سلبي نوعاً ما|Somewhat negatively","محايد|Neutral","إيجابي نوعاً ما|Somewhat positively","إيجابي جداً|Very positively"]},{"id":"q27","section":"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging","type":"radio","required":true,"text":"المعلومات التي تلقيتها عن مستقبل الشركة بعد الانتقال إلى مجموعة عمران كانت:|Information I received about the company's future after joining Omran Group was:","options":["غير كافية على الإطلاق|Not sufficient at all","غير كافية|Insufficient","كافية نوعاً ما|Somewhat sufficient","كافية|Sufficient","وافية جداً|Very comprehensive"]},{"id":"q28","section":"مستقبل الشركة وانتماء الموظف|Company Future & Employee Belonging","type":"open","required":false,"text":"ما المعلومات أو القرارات التي تودّ أن تكون أكثر وضوحاً بالنسبة لك؟|What information or decisions would you like to be clearer to you?"},{"id":"q29","section":"المزايا والتقدير الوظيفي|Benefits & Recognition","type":"rating5","required":true,"text":"أشعر أن جهودي ومساهماتي تُقدَّر بشكل مناسب من قِبَل الشركة.|I feel that my efforts and contributions are appropriately recognized by the company.","labels":["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},{"id":"q30","section":"المزايا والتقدير الوظيفي|Benefits & Recognition","type":"rating5","required":true,"text":"مزايا الموظفين الحالية (صحة، إجازات، مكافآت...) تلبي توقعاتي.|Current employee benefits (health, leave, bonuses…) meet my expectations.","labels":["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},{"id":"q31","section":"المزايا والتقدير الوظيفي|Benefits & Recognition","type":"yesno","required":true,"text":"هل تعتقد أنه يجب أن يحظى الموظفون بمزايا من مشاريع الشركة (فنادق، طيران، إلخ)؟|Do you believe employees should receive benefits from company projects (hotels, flights, etc.)?","options":["نعم|Yes","لا|No","لا أعرف|Not Sure"]},{"id":"q33","section":"المزايا والتقدير الوظيفي|Benefits & Recognition","type":"open","required":false,"text":"اقتراحات محددة لتحسين منظومة المزايا والتقدير:|Specific suggestions to improve the benefits and recognition system:"},{"id":"q34","section":"الرضا العام|Overall Satisfaction","type":"rating5","required":true,"text":"بشكل عام، مدى رضاك عن بيئة العمل في أساس:|Overall, how satisfied are you with the work environment at ASAAS?","labels":["غير راضٍ تماماً|Very Dissatisfied","غير راضٍ|Dissatisfied","محايد|Neutral","راضٍ|Satisfied","راضٍ جداً|Very Satisfied"]},{"id":"q35","section":"الرضا العام|Overall Satisfaction","type":"radio","required":true,"text":"ما احتمالية توصيتك لأحد المقربين بالعمل في شركة أساس؟|How likely are you to recommend ASAAS as a place to work to someone close to you?","options":["١-٢ (غير محتمل)|1–2 (Unlikely)","٣-٤|3–4","٥-٦|5–6","٧-٨|7–8","٩-١٠ (محتمل جداً)|9–10 (Very likely)"]},{"id":"q36","section":"الرضا العام|Overall Satisfaction","type":"open","required":false,"text":"ما الشيء الواحد الذي لو تغيّر سيحسن تجربتك في العمل بشكل كبير؟|What is the one thing that, if changed, would significantly improve your work experience?"},{"id":"q37","section":"الرضا العام|Overall Satisfaction","type":"open","required":false,"text":"ما التحدي الذي تشعر أن الإدارة لا تقدّره بما يكفي في الوقت الحالي؟|What challenge do you feel management currently undervalues?"},{"id":"q38","section":"الرضا العام|Overall Satisfaction","type":"open","required":false,"text":"ما المهارات أو السمات التي تراها ضرورية للقادة في أساس؟|What skills or traits do you consider essential for leaders at ASAAS?"},{"id":"q39","section":"الرضا العام|Overall Satisfaction","type":"open","required":false,"text":"أي تعليق أو مقترح تودّ مشاركته مع الإدارة:|Any comment or suggestion you would like to share with management:"}];
 
 // ── Helpers ───────────────────────────────────────────────────────────
 const ar = s => s ? s.split("|")[0] : "";
@@ -407,81 +308,95 @@ const GlobalStyle = () => (
 
 
 
-// ── Gist Setup Modal ──────────────────────────────────────────────────
+// ── Gist Setup Modal ─────────────────────────────────────────────────
 function GistSetupModal({onClose}){
-  const [gistId,    setGistId]    = useState(lsGet("asaas_gist_id")||"");
-  const [token,     setToken]     = useState(lsGet("asaas_gist_token")||"");
-  const [testing,   setTesting]   = useState(false);
-  const [testResult,setTestResult]= useState(null);
+  const [token, setToken] = useState(lsGet("asaas_gist_token")||"");
+  const [testing, setTesting]    = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const handleTest = async () => {
     setTesting(true); setTestResult(null);
-    lsSet("asaas_gist_id", gistId.trim());
     lsSet("asaas_gist_token", token.trim());
     invalidateCache();
+    // Try a write to verify token works
     const data = await gistRead();
-    if(data!==null){
-      setTestResult({ok:true, msg:"✅ اتصال ناجح! / Connection successful!"});
+    if(data !== null){
+      // Try write
+      const writeOk = await gistWrite(data);
+      if(writeOk){
+        setTestResult({ok:true, msg:"✅ القراءة والكتابة تعملان بنجاح! / Read & write successful!"});
+      } else {
+        setTestResult({ok:false, msg:"⚠️ القراءة تعمل لكن الكتابة فشلت — تحقق من الـ Token / Read works but write failed — check Token"});
+      }
     } else {
-      setTestResult({ok:false, msg:"❌ تعذّر الاتصال. تحقق من الـ ID والـ Token / Connection failed. Check ID & Token."});
+      setTestResult({ok:false, msg:"❌ تعذّر الاتصال بالـ Gist / Cannot connect to Gist"});
     }
     setTesting(false);
   };
 
   const handleSave = () => {
-    lsSet("asaas_gist_id", gistId.trim());
     lsSet("asaas_gist_token", token.trim());
     invalidateCache();
     onClose(true);
   };
 
+  const gistId = DEFAULT_GIST_ID;
+
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:16}}>
-      <div style={{background:"white",borderRadius:16,padding:28,maxWidth:540,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,.2)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-          <h3 style={{fontSize:17,fontWeight:800,color:"#1B3F6E"}}>
-            إعداد المزامنة المشتركة
-            <span className="en">Shared Sync Setup (GitHub Gist)</span>
+      <div style={{background:"white",borderRadius:16,padding:28,maxWidth:500,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,.2)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{fontSize:16,fontWeight:800,color:"#1B3F6E"}}>
+            إعداد المزامنة
+            <span className="en">Sync Setup (GitHub Gist)</span>
           </h3>
-          <button onClick={()=>onClose(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#6B7A8D",lineHeight:1}}>✕</button>
+          <button onClick={()=>onClose(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#6B7A8D"}}>✕</button>
         </div>
 
         <div style={{background:"#EBF3FB",borderRadius:10,padding:"12px 14px",marginBottom:16,fontSize:12,color:"#1B3F6E",lineHeight:1.8}}>
-          <strong>خطوات الإعداد (مرة واحدة فقط):</strong><br/>
-          ١. اذهب إلى <a href="https://gist.github.com" target="_blank" style={{color:"#2E73B8"}}>gist.github.com</a> → أنشئ Gist جديد (Secret)<br/>
-          &nbsp;&nbsp;&nbsp;الاسم: <code style={{background:"#D6EAF8",padding:"1px 5px",borderRadius:3}}>asaas-data.json</code> المحتوى: <code style={{background:"#D6EAF8",padding:"1px 5px",borderRadius:3}}>{"{}"}</code><br/>
-          ٢. انسخ الـ <strong>Gist ID</strong> من الرابط (السلسلة الطويلة بعد اسم المستخدم)<br/>
-          ٣. اذهب إلى <a href="https://github.com/settings/tokens" target="_blank" style={{color:"#2E73B8"}}>github.com/settings/tokens</a> → New token (classic) → فعّل <code>gist</code> فقط<br/>
-          ٤. الصق القيمتين أدناه واضغط اختبار ثم حفظ
+          <strong>الـ Gist ID مضمّن في الكود:</strong><br/>
+          <code style={{fontSize:11,background:"#D6EAF8",padding:"2px 6px",borderRadius:4,direction:"ltr",display:"inline-block"}}>
+            {gistId}
+          </code>
           <br/><br/>
-          <span style={{direction:"ltr",display:"block",color:"#2E5F8E",fontSize:11}}>
-            After setup: every browser that opens the survey will read &amp; write the same data automatically.
+          لتفعيل الكتابة (للمسؤول فقط)، أدخل الـ GitHub Token:
+          <span style={{display:"block",direction:"ltr",fontSize:11,marginTop:4,opacity:.8}}>
+            To enable writing (admin only), enter your GitHub Token with gist scope.
           </span>
         </div>
 
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div>
-            <label style={{fontSize:12,color:"#6B7A8D",display:"block",marginBottom:3}}>Gist ID</label>
-            <input className="inp" dir="ltr" placeholder="e.g. a1b2c3d4e5f6..." value={gistId} onChange={e=>setGistId(e.target.value)} style={{fontFamily:"monospace",fontSize:13}}/>
-          </div>
-          <div>
-            <label style={{fontSize:12,color:"#6B7A8D",display:"block",marginBottom:3}}>GitHub Token (gist scope)</label>
-            <input className="inp" dir="ltr" type="password" placeholder="ghp_xxxxxxxxxxxx" value={token} onChange={e=>setToken(e.target.value)} style={{fontFamily:"monospace",fontSize:13}}/>
+            <label style={{fontSize:12,color:"#6B7A8D",display:"block",marginBottom:3}}>
+              GitHub Token <span style={{opacity:.7}}>(gist scope)</span>
+            </label>
+            <input className="inp" dir="ltr" type="password"
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              value={token} onChange={e=>setToken(e.target.value)}
+              style={{fontFamily:"monospace",fontSize:13}}/>
+            <div style={{fontSize:11,color:"#6B7A8D",marginTop:4,direction:"ltr"}}>
+              Get it from: github.com/settings/tokens → New token (classic) → check "gist" only
+            </div>
           </div>
         </div>
 
         {testResult && (
-          <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,background:testResult.ok?"#E8F8F2":"#FDECEA",color:testResult.ok?"#1A5E3F":"#8B1E1E",fontSize:13}}>
+          <div style={{marginTop:10,padding:"8px 12px",borderRadius:8,
+            background:testResult.ok?"#E8F8F2":testResult.msg.includes("⚠")?"#FEF3E2":"#FDECEA",
+            color:testResult.ok?"#1A5E3F":testResult.msg.includes("⚠")?"#7D4A00":"#8B1E1E",
+            fontSize:13,lineHeight:1.6}}>
             {testResult.msg}
           </div>
         )}
 
-        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
-          <button className="btn btn-ghost btn-sm" onClick={()=>handleTest()} disabled={!gistId.trim()||!token.trim()||testing}>
-            {testing ? <><span className="spinner" style={{width:14,height:14}}/> جاري الاختبار...</> : "🔌 اختبار الاتصال / Test"}
+        <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}>
+          <button className="btn btn-ghost btn-sm" onClick={handleTest}
+            disabled={!token.trim()||testing}>
+            {testing?<><span className="spinner" style={{width:14,height:14}}/> جاري الاختبار...</>:"🔌 اختبار / Test"}
           </button>
-          <button className="btn btn-teal btn-sm" onClick={handleSave} disabled={!gistId.trim()}>
-            💾 حفظ الإعدادات / Save
+          <button className="btn btn-teal btn-sm" onClick={handleSave}
+            disabled={!token.trim()}>
+            💾 حفظ / Save
           </button>
         </div>
       </div>
