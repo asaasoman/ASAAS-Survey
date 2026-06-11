@@ -83,63 +83,73 @@ async function gistRead(){
   const {id,token} = getGistConfig();
   if(!id) return null;
   try{
-    const headers = {"Accept":"application/vnd.github+json"};
+    const headers = {"Accept":"application/vnd.github+json","Cache-Control":"no-cache"};
     if(token) headers["Authorization"]=`Bearer ${token}`;
-    const r = await fetch(`https://api.github.com/gists/${id}`,{headers});
-    if(!r.ok) return null;
+    const r = await fetch(`https://api.github.com/gists/${id}?t=${Date.now()}`,{headers});
+    if(!r.ok){ console.warn("Gist read failed:",r.status); return null; }
     const j = await r.json();
     const content = j.files?.["asaas-data.json"]?.content;
-    return content ? JSON.parse(content) : null;
-  }catch{return null;}
+    if(!content){ console.warn("Gist file empty or missing"); return {}; }
+    return JSON.parse(content);
+  }catch(e){ console.warn("Gist read error:",e); return null; }
 }
 
-// Write entire data object to Gist
+// Write entire data object to Gist — returns true/false
 async function gistWrite(data){
   const {id,token} = getGistConfig();
-  if(!id||!token) return false;
+  if(!id||!token){ console.warn("gistWrite: no id or token"); return false; }
   try{
+    const body = JSON.stringify({files:{"asaas-data.json":{content:JSON.stringify(data,null,2)}}});
     const r = await fetch(`https://api.github.com/gists/${id}`,{
       method:"PATCH",
       headers:{"Accept":"application/vnd.github+json","Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
-      body:JSON.stringify({files:{"asaas-data.json":{content:JSON.stringify(data,null,2)}}})
+      body
     });
-    return r.ok;
-  }catch{return false;}
+    if(!r.ok){ const t=await r.text(); console.warn("Gist write failed:",r.status,t); return false; }
+    return true;
+  }catch(e){ console.warn("Gist write error:",e); return false; }
 }
 
 // In-memory cache of the full remote data object
 let _remoteCache = null;
+let _pendingWrite = false;
 
-// storageGet: read from Gist (or localStorage fallback)
+// storageGet: always read fresh from Gist on first call per session
 async function storageGet(k){
   if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return lsGet(k);
-  const {id} = getGistConfig();
-  // Always try Gist (DEFAULT_GIST_ID is always set)
   if(!_remoteCache){
-    _remoteCache = await gistRead();
-    // Seed cache with localStorage values if gist is empty
-    if(_remoteCache && !_remoteCache.asaas_q){
+    const remote = await gistRead();
+    _remoteCache = remote || {};
+    // If Gist is empty, push local data up (first-time admin setup)
+    const {token} = getGistConfig();
+    if(token && Object.keys(_remoteCache).length===0){
       const localQ = lsGet("asaas_q");
+      const localR = lsGet("asaas_r");
+      const localOn= lsGet("asaas_on");
       if(localQ) _remoteCache.asaas_q = localQ;
+      if(localR) _remoteCache.asaas_r = localR;
+      if(localOn!==null) _remoteCache.asaas_on = localOn;
+      if(Object.keys(_remoteCache).length>0) gistWrite(_remoteCache);
     }
   }
-  if(_remoteCache && k in _remoteCache) return _remoteCache[k];
+  if(k in _remoteCache) return _remoteCache[k];
   return lsGet(k);
 }
 
-// storageSet: write to localStorage immediately + update Gist async
+// storageSet: update cache + local + write to Gist (admin only)
 async function storageSet(k, v){
   lsSet(k, v);
   if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return true;
   const {token} = getGistConfig();
-  if(!token) return true; // visitor: no token → skip remote write
+  if(!token) return true; // visitor: no token — skip remote write
   if(!_remoteCache) _remoteCache = (await gistRead()) || {};
   _remoteCache[k] = v;
-  gistWrite(_remoteCache); // async, don't await — UI stays responsive
-  return true;
+  const ok = await gistWrite(_remoteCache);
+  if(!ok) console.warn("storageSet: gistWrite failed for key:",k);
+  return ok;
 }
 
-// Force re-read from Gist (invalidate cache)
+// Force re-read from Gist on next access
 function invalidateCache(){ _remoteCache = null; }
 
 // ── Storage: END ──────────────────────────────────────────────────────
@@ -1478,6 +1488,7 @@ function ReportPage({questions, responses}) {
 // ── Root App ──────────────────────────────────────────────────────────
 function App() {
   const [unlocked, setUnlocked] = useState(()=>lsGet("asaas_auth")===true);
+  const [saveToast, setSaveToast] = useState(null); // {ok:bool, msg:string}
   const [showSetup, setShowSetup] = useState(false);
   const [page, setPage] = useState("survey");
   const [questions, setQuestions] = useState(()=>lsGet("asaas_q")||INITIAL_QUESTIONS);
@@ -1494,29 +1505,37 @@ function App() {
       setSyncing(true);
       invalidateCache();
       try{
-        const [qs, rs, on] = await Promise.all([
-          storageGet("asaas_q"),
-          storageGet("asaas_r"),
-          storageGet("asaas_on")
-        ]);
-        if(qs) setQuestions(qs);
-        if(rs) setResponses(rs);
-        if(on!==null) setSurveyActive(on);
+        const qs  = await storageGet("asaas_q");
+        const rs  = await storageGet("asaas_r");
+        const on  = await storageGet("asaas_on");
+        if(qs && Array.isArray(qs) && qs.length>0) setQuestions(qs);
+        if(rs && Array.isArray(rs)) setResponses(rs);
+        if(on!==null && on!==undefined) setSurveyActive(on);
         setLastSync(new Date());
         setSyncError(null);
       }catch(e){
+        console.error("Sync error:",e);
         setSyncError("تعذّر المزامنة / Sync failed");
       }
       setSyncing(false);
     })();
   },[]);
 
-  const saveQ = qs=>{setQuestions(qs);storageSet("asaas_q",qs);};
-  const saveR = rs=>{setResponses(rs);storageSet("asaas_r",rs);};
-  const toggleOn = v=>{setSurveyActive(v);storageSet("asaas_on",v);};
-  const handleSubmit = a=>{
+  const showToast = (ok, msg) => {
+    setSaveToast({ok,msg});
+    setTimeout(()=>setSaveToast(null), 3000);
+  };
+  const saveQ = async qs=>{
+    setQuestions(qs);
+    const ok = await storageSet("asaas_q",qs);
+    const {token} = getGistConfig();
+    if(token) showToast(ok, ok?"✓ تم الحفظ والمزامنة / Saved & synced":"✗ فشل الحفظ / Save failed");
+  };
+  const saveR = async rs=>{setResponses(rs); await storageSet("asaas_r",rs);};
+  const toggleOn = async v=>{setSurveyActive(v); await storageSet("asaas_on",v);};
+  const handleSubmit = async a=>{
     const rs=[...responses,{...a,id:Date.now(),submittedAt:new Date().toISOString()}];
-    saveR(rs);
+    await saveR(rs);
   };
 
   const handleUnlock = () => { lsSet("asaas_auth",true); setUnlocked(true); };
@@ -1640,12 +1659,12 @@ function App() {
               أساس | ASAAS
               <span className="en" style={{display:"flex",alignItems:"center",gap:4}}>
                 Employee Survey Platform
-                {syncing && <span style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:9,opacity:.8}}>
-                  <span style={{width:8,height:8,border:"1.5px solid rgba(255,255,255,.4)",borderTopColor:"#2DADA0",borderRadius:"50%",display:"inline-block",animation:"spin .8s linear infinite"}}/>
-                  مزامنة...
+                {syncing && <span style={{display:"inline-flex",alignItems:"center",gap:3,fontSize:9,background:"rgba(45,173,160,.3)",padding:"1px 6px",borderRadius:10}}>
+                  <span style={{width:7,height:7,border:"1.5px solid rgba(255,255,255,.4)",borderTopColor:"#2DADA0",borderRadius:"50%",display:"inline-block",animation:"spin .8s linear infinite"}}/>
+                  جاري التزامن...
                 </span>}
-                {!syncing && lastSync && <span style={{fontSize:9,opacity:.6}}>✓ {lastSync.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span>}
-                {syncError && <span style={{fontSize:9,color:"#FAC775"}}>⚠ {syncError}</span>}
+                {!syncing && lastSync && <span style={{fontSize:9,background:"rgba(45,173,160,.2)",padding:"1px 6px",borderRadius:10,color:"#7FDED8"}}>✓ {lastSync.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}</span>}
+                {syncError && <span style={{fontSize:9,color:"#FAC775",background:"rgba(250,199,117,.2)",padding:"1px 6px",borderRadius:10}}>⚠ {syncError}</span>}
               </span>
             </span>
           </div>
@@ -1656,6 +1675,12 @@ function App() {
                 {ar_}<span className="en">{en_}</span>
               </button>
             ))}
+            {unlocked && (
+              <button className="nav-tab" onClick={()=>{invalidateCache();window.location.reload();}} title="تحديث البيانات / Refresh data"
+                style={{marginRight:4,opacity:.7,fontSize:14,border:"1px solid rgba(255,255,255,.2)",borderRadius:6}}>
+                🔄 <span style={{fontSize:9,display:"block",opacity:.7}}>تحديث/Refresh</span>
+              </button>
+            )}
             {unlocked && (
               <button className="nav-tab" onClick={()=>setShowSetup(true)} title="إعداد المزامنة / Sync Setup"
                 style={{marginRight:4,opacity:.7,fontSize:14,border:"1px solid rgba(255,255,255,.2)",borderRadius:6}}>
@@ -1699,6 +1724,15 @@ function App() {
           }
         }}/>}
 
+        {saveToast && (
+          <div style={{position:"fixed",bottom:unlocked?70:16,left:"50%",transform:"translateX(-50%)",
+            background:saveToast.ok?"#1A5E3F":"#8B1E1E",color:"white",borderRadius:10,padding:"10px 20px",
+            fontSize:13,fontWeight:500,zIndex:999,boxShadow:"0 4px 16px rgba(0,0,0,.2)",
+            display:"flex",alignItems:"center",gap:8,whiteSpace:"nowrap",
+            animation:"fadeIn .2s ease"}}>
+            {saveToast.msg}
+          </div>
+        )}
         <div className="fnav fl">
           {NAV.map(([id,ar_,en_,ic])=>(
             <div key={id} className={`fni${page===id?" active":""}`} onClick={()=>setPage(id)}>
