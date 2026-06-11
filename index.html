@@ -52,9 +52,10 @@ const T = ({ ar, en, className="" }) => (
   </span>
 );
 
-// ── Storage: GitHub Gist (shared cloud DB) ──────────────────────────
-// Gist ID is hardcoded — all browsers read it automatically.
-// Only admin (with token) can write changes back.
+// ── Storage ──────────────────────────────────────────────────────────
+// Primary source of truth: INITIAL_QUESTIONS embedded in code.
+// Changes are saved to localStorage AND pushed to Gist (admin only).
+// On load: use Gist data if available and newer, else use INITIAL_QUESTIONS.
 
 const DEFAULT_GIST_ID = "fdad02e578086b113b861d208e310cc5";
 
@@ -68,82 +69,63 @@ function getCfg(){
   };
 }
 
-// Read from Gist — no token needed for reading (secret gists are readable by ID)
+// Read from Gist (no token needed for reading)
 async function gistRead(){
   const {id, token} = getCfg();
   if(!id) return null;
   try{
-    const headers = {
-      "Accept": "application/vnd.github+json",
-      "Cache-Control": "no-cache, no-store"
-    };
+    const headers = {"Accept":"application/vnd.github+json"};
     if(token) headers["Authorization"] = `Bearer ${token}`;
-    const url = `https://api.github.com/gists/${id}`;
-    const r = await fetch(url, {headers, cache:"no-store"});
-    if(!r.ok){ console.warn("gistRead HTTP error:", r.status, await r.text()); return null; }
+    const r = await fetch(`https://api.github.com/gists/${id}`, {headers, cache:"no-store"});
+    if(!r.ok) return null;
     const j = await r.json();
     const raw = j.files?.["asaas-data.json"]?.content;
-    if(!raw){ console.warn("gistRead: file not found in gist"); return {}; }
-    const parsed = JSON.parse(raw);
-    console.log("gistRead OK, keys:", Object.keys(parsed));
-    return parsed;
-  }catch(e){ console.warn("gistRead error:", e); return null; }
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
 }
 
-// Write to Gist — requires token (admin only)
+// Write to Gist (token required)
 async function gistWrite(data){
   const {id, token} = getCfg();
-  if(!id || !token){ console.warn("gistWrite: missing id or token"); return false; }
+  if(!id || !token) return false;
   try{
     const r = await fetch(`https://api.github.com/gists/${id}`, {
-      method: "PATCH",
-      headers: {
-        "Accept": "application/vnd.github+json",
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        files: { "asaas-data.json": { content: JSON.stringify(data, null, 2) } }
-      })
+      method:"PATCH",
+      headers:{"Accept":"application/vnd.github+json","Authorization":`Bearer ${token}`,"Content-Type":"application/json"},
+      body: JSON.stringify({files:{"asaas-data.json":{content:JSON.stringify(data,null,2)}}})
     });
-    if(!r.ok){ console.warn("gistWrite failed:", r.status, await r.text()); return false; }
-    console.log("gistWrite OK");
-    return true;
-  }catch(e){ console.warn("gistWrite error:", e); return false; }
+    return r.ok;
+  }catch(e){ return false; }
 }
 
-let _cache = null;
+// Simple get: localStorage first, fallback to nothing (Gist loaded at startup)
+function storageGetSync(k){
+  return lsGet(k);
+}
 
+// Async get: same as sync (Gist data already loaded into localStorage at startup)
 async function storageGet(k){
   if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return lsGet(k);
-  if(!_cache){
-    const remote = await gistRead();
-    if(remote && typeof remote === "object"){
-      _cache = remote;
-      // Cache locally for offline fallback
-      if(remote.asaas_q) lsSet("asaas_q", remote.asaas_q);
-      if(remote.asaas_r) lsSet("asaas_r", remote.asaas_r);
-      if(remote.asaas_on !== undefined) lsSet("asaas_on", remote.asaas_on);
-    } else {
-      _cache = {};
-    }
-  }
-  if(k in _cache) return _cache[k];
-  return lsGet(k); // fallback to local
+  return lsGet(k);
 }
 
+// Set: save to localStorage + push to Gist async (admin only)
 async function storageSet(k, v){
   lsSet(k, v);
   if(k==="asaas_auth"||k==="asaas_gist_id"||k==="asaas_gist_token") return true;
   const {token} = getCfg();
-  if(!token){ console.log("storageSet: no token, local-only for key:", k); return true; }
-  if(!_cache) _cache = (await gistRead()) || {};
-  _cache[k] = v;
-  const ok = await gistWrite(_cache);
+  if(!token) return true;
+  // Build full data object from localStorage and push
+  const data = {
+    asaas_q:  lsGet("asaas_q"),
+    asaas_r:  lsGet("asaas_r"),
+    asaas_on: lsGet("asaas_on")
+  };
+  const ok = await gistWrite(data);
   return ok;
 }
 
-function invalidateCache(){ _cache = null; }
+function invalidateCache(){ /* no-op: no cache needed */ }
 
 // ── Storage: END ──────────────────────────────────────────────────────
 
@@ -1416,18 +1398,42 @@ function App() {
   useEffect(()=>{
     (async()=>{
       setSyncing(true);
-      invalidateCache();
       try{
-        const qs  = await storageGet("asaas_q");
-        const rs  = await storageGet("asaas_r");
-        const on  = await storageGet("asaas_on");
-        if(qs && Array.isArray(qs) && qs.length>0) setQuestions(qs);
-        if(rs && Array.isArray(rs)) setResponses(rs);
-        if(on!==null && on!==undefined) setSurveyActive(on);
+        // Step 1: Seed localStorage from INITIAL_QUESTIONS if not set
+        const localQ = lsGet("asaas_q");
+        if(!localQ || !Array.isArray(localQ) || localQ.length === 0){
+          lsSet("asaas_q", INITIAL_QUESTIONS);
+          setQuestions(INITIAL_QUESTIONS);
+        } else {
+          setQuestions(localQ);
+        }
+        const localR = lsGet("asaas_r");
+        if(localR && Array.isArray(localR)) setResponses(localR);
+        const localOn = lsGet("asaas_on");
+        if(localOn !== null) setSurveyActive(localOn);
+
+        // Step 2: Try Gist — only use its data if it has MORE responses (never overwrite questions with Gist)
+        const remote = await gistRead();
+        if(remote){
+          // Only sync responses from Gist (not questions — questions come from code/admin edits)
+          const remoteR = remote.asaas_r;
+          if(remoteR && Array.isArray(remoteR) && remoteR.length > (localR||[]).length){
+            lsSet("asaas_r", remoteR);
+            setResponses(remoteR);
+          }
+          // Sync questions from Gist if they have a newer timestamp
+          const remoteUpdated = remote._updated || 0;
+          const localUpdated  = lsGet("asaas_q_updated") || 0;
+          if(remote.asaas_q && Array.isArray(remote.asaas_q) && remote.asaas_q.length > 0
+             && remoteUpdated > localUpdated){
+            lsSet("asaas_q", remote.asaas_q);
+            lsSet("asaas_q_updated", remoteUpdated);
+            setQuestions(remote.asaas_q);
+          }
+        }
         setLastSync(new Date());
         setSyncError(null);
       }catch(e){
-        console.error("Sync error:",e);
         setSyncError("تعذّر المزامنة / Sync failed");
       }
       setSyncing(false);
@@ -1440,9 +1446,23 @@ function App() {
   };
   const saveQ = async qs=>{
     setQuestions(qs);
-    const ok = await storageSet("asaas_q",qs);
-    const {token} = getGistConfig();
-    if(token) showToast(ok, ok?"✓ تم الحفظ والمزامنة / Saved & synced":"✗ فشل الحفظ / Save failed");
+    lsSet("asaas_q", qs);
+    lsSet("asaas_q_updated", Date.now());
+    const {token} = getCfg();
+    if(token){
+      // Push questions + timestamp to Gist so other browsers pick them up
+      const data = {
+        asaas_q: qs,
+        asaas_r: lsGet("asaas_r"),
+        asaas_on: lsGet("asaas_on"),
+        _updated: Date.now()
+      };
+      const ok = await gistWrite(data);
+      showToast(ok, ok ? "✓ تم الحفظ والمزامنة / Saved & synced" : "✗ فشل الحفظ — تحقق من الـ Token / Save failed — check Token");
+    } else {
+      lsSet("asaas_q", qs);
+      showToast(true, "✓ تم الحفظ محلياً / Saved locally");
+    }
   };
   const saveR = async rs=>{setResponses(rs); await storageSet("asaas_r",rs);};
   const toggleOn = async v=>{setSurveyActive(v); await storageSet("asaas_on",v);};
